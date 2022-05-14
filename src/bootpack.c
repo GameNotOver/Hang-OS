@@ -21,8 +21,8 @@ void HariMain(void)
 		256~511	键盘输入（256 bits）
 		512~767	鼠标输入（256 bits）
 		*/
-	FIFO32 fifo32;
-	int fifo32buf[128];
+	FIFO32 fifo32, keyCmdFifo;
+	int fifo32buf[128], keyCmdBuf[32];
 
 	MOUSE_DEC mdec;
 
@@ -38,6 +38,8 @@ void HariMain(void)
 	extern char keytable1[0x80];
 	int key_shift = 0;
 	int key_to = 0;
+	int key_leds = (binfo->leds >> 4) & 7;
+	int keycmd_wait = -1;
 
 	TASK *task_a, *task_b[3];
 
@@ -66,6 +68,10 @@ void HariMain(void)
 	init_fifo32(&fifo32, 128, fifo32buf, NULL);
 	init_keyboard(&fifo32, 256);
 	enable_mouse(&mdec, &fifo32, 512);
+
+	init_fifo32(&keyCmdFifo, 32, keyCmdBuf, 0);
+	fifo32_put(&keyCmdFifo, KEYCMD_LED);
+	fifo32_put(&keyCmdFifo, key_leds);
 
 	io_out8(PIC0_IMR, IRQALLOW_TIMER & IRQALLOW_PIC_1 & IRQALLOW_KEYBD); /* 允许PIT、PIC1和键盘 */
 	io_out8(PIC1_IMR, IRQALLOW_MOUSE); /* 允许鼠标 */
@@ -182,6 +188,12 @@ void HariMain(void)
 		sprintf(s, "%010d", count);
 		putStrOnSheet(sheetWin, 40, 28, COL8_000000, s);
 
+		if(fifo32_status(&keyCmdFifo) > 0 && keycmd_wait < 0){
+			keycmd_wait = fifo32_get(&keyCmdFifo);
+			wait_KBC_sendready();
+			io_out8(PORT_KEYDAT, keycmd_wait);
+		}
+
 		io_cli();
 
 		if(fifo32_status(&fifo32) == 0){
@@ -194,8 +206,12 @@ void HariMain(void)
 				case 0 : case 1 :
 					timer_init(timer[0], &fifo32, i ^ 0x0000001);
 					timer_settimer(timer[0], 50);
-					cursor_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
-					putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
+
+					if(cursor_c >= 0){
+						cursor_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
+						putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
+					}
+					
 					break;
 				case 3 :
 					putStrOnSheet(sheetBack, 0, 64, COL8_FFFFFF, "3 SEC");
@@ -215,6 +231,12 @@ void HariMain(void)
 						}
 					}else{
 						s[0] = 0;
+					}
+					if( 'A' <= s[0] && s[0] <= 'Z'){
+						if(((key_leds & 4) == 0 && key_shift == 0) || 
+						   ((key_leds & 4) != 0 && key_shift != 0)){
+							   s[0] += 0x20;	/* 将大写字母转换为小写 */
+						   }
 					}
 					if(s[0] != 0){		/* 一般字符 */
 						if(key_to == 0){		/* 发送给任务a */
@@ -244,10 +266,15 @@ void HariMain(void)
 							key_to = 1;
 							set_win_title_bar(sheetWinNotepad, "NotePad", 0);
 							set_win_title_bar(sheetCmd, "Console", 1);
+							cursor_c = -1;	/* Notepad不显示光标 */
+							putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, COL8_FFFFFF);
+							fifo32_put(&taskCmd->fifo, 2);	/* 命令行窗口显示光标 */
 						}else{
 							key_to = 0;
 							set_win_title_bar(sheetWinNotepad, "NotePad", 1);
 							set_win_title_bar(sheetCmd, "Console", 0);
+							cursor_c = COL8_000000;	/* Notepad显示光标 */
+							fifo32_put(&taskCmd->fifo, 3);	/* 命令行窗口不显示光标 */
 						}
 						sheet_refresh(sheetWinNotepad, 0, 0, sheetWinNotepad->bxsize, 21);
 						sheet_refresh(sheetCmd, 0, 0, sheetCmd->bxsize, 21);
@@ -264,8 +291,34 @@ void HariMain(void)
 					if(i - 256 == 0xb6){	/* 右shift键 OFF */
 						key_shift &= ~2;
 					}
+					/* Lock 设置 */
+					if (i == 256 + 0x3a) {	/* CapsLock */
+						key_leds ^= 4;
+						fifo32_put(&keyCmdFifo, KEYCMD_LED);
+						fifo32_put(&keyCmdFifo, key_leds);
+					}
+					if (i == 256 + 0x45) {	/* NumLock */
+						key_leds ^= 2;
+						fifo32_put(&keyCmdFifo, KEYCMD_LED);
+						fifo32_put(&keyCmdFifo, key_leds);
+					}
+					if (i == 256 + 0x46) {	/* ScrollLock */
+						key_leds ^= 1;
+						fifo32_put(&keyCmdFifo, KEYCMD_LED);
+						fifo32_put(&keyCmdFifo, key_leds);
+					}
+					if (i == 256 + 0xfa) {	/* 键盘成功收到数据 */
+						keycmd_wait = -1;
+					}
+					if (i == 256 + 0xfe) {	/* 键盘没有成功收到数据 */
+						wait_KBC_sendready();
+						io_out8(PORT_KEYDAT, keycmd_wait);
+					}
 
-					putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
+					if(cursor_c >= 0){
+						putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
+					}
+					
 					break;
 				case 512 ... 767 :	/* 鼠标 */		
 					if(mouse_decode(&mdec, i - 512) != 0){
@@ -345,7 +398,7 @@ void console_task(SHEET *sheet){
 	int i;
 	char s[2];
 	int fifobuf[128];
-	int cursor_x = 16, cursor_c = COL8_FFFFFF;
+	int cursor_x = 16, cursor_c = -1;
 
 	init_fifo32(&task->fifo, 128, fifobuf, task);
 
@@ -362,21 +415,25 @@ void console_task(SHEET *sheet){
 			task_sleep(task);
 			io_sti();
 		}else{
-			// putStrOnSheet(sheet, 20, 28, COL8_FFFFFF, "kkkkk");
+
 			i = fifo32_get(&task->fifo);
 			io_sti();
 
 			switch(i){
 				case 0: case 1:
-					if(i != 0){
-						timer_init(timer, &task->fifo, 0);
-						cursor_c = COL8_FFFFFF;
-					}else{
-						timer_init(timer, &task->fifo, 1);
-						cursor_c = COL8_000000;
-					}
-					putBoxOnSheet(sheet, cursor_x, 28, 8, 16, cursor_c);
+					timer_init(timer, &task->fifo, i ^ 0x0000001);
 					timer_settimer(timer, 50);
+
+					if(cursor_c >= 0)
+						cursor_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
+					
+					break;
+				case 2: case 3 :
+					sprintf(s, "%d", i);
+					putStrOnSheet(sheet, 30, 28, COL8_FFFFFF, s);
+					cursor_c = i == 2 ? COL8_FFFFFF : -1;
+					if(i == 3) 
+						putBoxOnSheet(sheet, cursor_x, 28, 8, 16, COL8_000000);
 					break;
 				case 256 ... 511:
 					if(i == 8 + 256){	/* 退格键 */
@@ -395,7 +452,10 @@ void console_task(SHEET *sheet){
 					break;
 				default:
 					break;
-			}
+			}	
+
+			if(cursor_c >= 0)
+				putBoxOnSheet(sheet, cursor_x, 28, 8, 16, cursor_c);
 
 		}
 	}

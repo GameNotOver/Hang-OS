@@ -72,6 +72,7 @@
 #define IRQALLOW_KEYBD		0xfd	/* 1111 1101 */
 #define IRQALLOW_PIC_1		0xfb	/* 1111 1011 */
 #define IRQALLOW_MOUSE		0xef	/* 1110 1111 */
+#define KEYCMD_LED			0xed
 
 
 /* fifo.c */
