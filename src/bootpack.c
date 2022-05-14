@@ -34,7 +34,10 @@ void HariMain(void)
 
 	TIMER *timer[11];
 
-	extern char keytable[0x54];
+	extern char keytable0[0x80];
+	extern char keytable1[0x80];
+	int key_shift = 0;
+	int key_to = 0;
 
 	TASK *task_a, *task_b[3];
 
@@ -43,7 +46,9 @@ void HariMain(void)
 
 
 	int i;
-	int key_to = 0;
+
+	char tempS[30];
+	
 
 	init_gdtidt();
 	init_pic();
@@ -187,7 +192,6 @@ void HariMain(void)
 			io_sti();
 			switch (i){
 				case 0 : case 1 :
-					// putBoxOnSheet(sheetBack, 10, 80, 5, 15, COL8_008484);
 					timer_init(timer[0], &fifo32, i ^ 0x0000001);
 					timer_settimer(timer[0], 50);
 					cursor_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
@@ -199,22 +203,29 @@ void HariMain(void)
 					break;
 				case 10 :
 					putStrOnSheet(sheetBack, 0, 64, COL8_FFFFFF, "10 SEC");
-					// task_sleep(task_b);
 					break;
 				case 256 ... 511 :	/* 键盘 */										
-					sprintf(s, "%02X", i - 256);
+					sprintf(s, "%02X", (i - 256));
 					putStrOnSheet(sheetBack, 0, 16, COL8_FFFFFF, s);
-					if(i < 256 + 0x54 && keytable[i - 256] != 0){	/* 一般字符 */
+					if(i < 256 + 0x80 ){	
+						if(key_shift == 0){
+							s[0] = keytable0[i - 256];
+						}else{
+							s[0] = keytable1[i - 256];
+						}
+					}else{
+						s[0] = 0;
+					}
+					if(s[0] != 0){		/* 一般字符 */
 						if(key_to == 0){		/* 发送给任务a */
 							if(cursor_x < 8 * 18){
-								s[0] = keytable[i - 256];
 								s[1] = 0;
 								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_000000, COL8_FFFFFF, s);
 								cursor_x += 8;
 							}
 						}else{
 							/* 为了不与键盘数据冲突， 在写入fifo时将键盘数值加256 */ 
-							fifo32_put(&taskCmd->fifo, keytable[i - 256] + 256);
+							fifo32_put(&taskCmd->fifo, s[0] + 256);
 						}
 					}
 					if(i - 256 == 0x0e)	{	/* 退格键 */
@@ -241,6 +252,19 @@ void HariMain(void)
 						sheet_refresh(sheetWinNotepad, 0, 0, sheetWinNotepad->bxsize, 21);
 						sheet_refresh(sheetCmd, 0, 0, sheetCmd->bxsize, 21);
 					}
+					if(i - 256 == 0x2a){	/* 左shift键 ON */
+						key_shift |= 1;
+					}
+					if(i - 256 == 0xaa){	/* 左shift键 OFF */
+						key_shift &= ~1;
+					}
+					if(i - 256 == 0x36){	/* 右shift键 ON */
+						key_shift |= 2;
+					}
+					if(i - 256 == 0xb6){	/* 右shift键 OFF */
+						key_shift &= ~2;
+					}
+
 					putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
 					break;
 				case 512 ... 767 :	/* 鼠标 */		
