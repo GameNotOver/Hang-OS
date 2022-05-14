@@ -123,7 +123,7 @@ void putblock8_8(char *vram, int vxsize, int pxsize,
 	return;
 }
 
-void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act){
+void make_window8(MEMMAN *man, SHEET *sheet, int xsize, int ysize, char *title, char act){
 	extern char closebtn[14][16];
 	int x, y;
 	char c, tc, tbc;
@@ -134,7 +134,10 @@ void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act){
 		tc = COL8_C6C6C6;
 		tbc = COL8_848484;
 	}
-	unsigned char *buf = sheet->buf;
+
+	BUFFER buf = (BUFFER) memman_alloc_4k(man, xsize * ysize);
+	sheet_setbuf(sheet, buf, xsize, ysize, -1);
+
 	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         xsize - 1, 0        );
 	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         xsize - 2, 1        );
 	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         0,         ysize - 1);
@@ -202,6 +205,6 @@ void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, 
 }
 
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color){
-	boxfill8(sheet->buf, sheet->bxsize, color, x, y, x + sx, y + sy);
+	boxfill8(sheet->buf, sheet->bxsize, color, x, y, x + sx - 1, y + sy - 1);
 	sheet_refresh(sheet, x, y, x + sx + 1, y + sy + 1);
 }

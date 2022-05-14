@@ -95,6 +95,9 @@
 #define MAX_TASKS_LV	100
 #define MAX_TASKLEVELS	10
 
+
+typedef unsigned char * BUFFER;
+
 typedef struct SEGMENT_DESCRIPTOR {
 	short limit_low, base_low;
 	char base_mid, access_right;

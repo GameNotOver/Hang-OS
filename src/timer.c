@@ -16,7 +16,7 @@ void init_pit(){
 }
 
 void inthandler20(int *esp){
-    // int i = 0;
+
     TIMER *timer;
     char taskswitch = 0;
     extern TIMER *taskTimer;     /* multitask.c */

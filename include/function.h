@@ -46,10 +46,10 @@ void init_pic(void);
 void inthandler27(int *esp);
 
 /* fifo.c */
-void init_fifo8(FIFO8 *fifo, int size, unsigned char *buf);
-int fifo8_put(FIFO8 *fifo, unsigned char data);
-int fifo8_get(FIFO8 *fifo);
-int fifo8_status(FIFO8 *fifo);
+// void init_fifo8(FIFO8 *fifo, int size, unsigned char *buf);
+// int fifo8_put(FIFO8 *fifo, unsigned char data);
+// int fifo8_get(FIFO8 *fifo);
+// int fifo8_status(FIFO8 *fifo);
 void init_fifo32(FIFO32 *fifo, int size, int *buf, TASK *task);
 int fifo32_put(FIFO32 *fifo, int data);
 int fifo32_get(FIFO32 *fifo);
@@ -92,7 +92,7 @@ void sheet_free(SHEET *sheet);
 void sheet_refreshmap(SHEETCTRL *ctrl, int vx0, int vy0, int vx1, int vy1, int h0);
 
 /*  */
-void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act);
+void make_window8(MEMMAN *man, SHEET *sheet, int xsize, int ysize, char *title, char act);
 void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c);
 
 /* timer.c */
@@ -113,6 +113,5 @@ TASK *task_current(void);
 void task_add(TASK *task);
 void task_remove(TASK *task);
 void task_switch_preset(void);
-void task_idle(void);
 
 #endif

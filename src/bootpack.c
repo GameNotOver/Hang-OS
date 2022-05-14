@@ -4,6 +4,7 @@
 #include "../include/function.h"
 
 void task_b_main(SHEET *sheet);
+void console_task(SHEET *sheet);
 
 void HariMain(void)
 {
@@ -31,11 +32,15 @@ void HariMain(void)
 	SHEET *sheetBack, *sheetMouse, *sheetWin, *sheet_win_b[3];
 	unsigned char *bufBack, bufMouse[256], *bufWin, *buf_win_b;
 
-	TIMER *timer[21];
+	TIMER *timer[11];
 
 	extern char keytable[0x54];
 
 	TASK *task_a, *task_b[3];
+
+	SHEET *sheetCmd;
+	unsigned *bufCmd;
+	TASK *taskCmd;
 
 
 	int i;
@@ -85,13 +90,6 @@ void HariMain(void)
 	timer[3] = timer_alloc();
 	timer_init(timer[3], &fifo32, 3);
 	timer_settimer(timer[3], 3 * 100);
-	/* 11s定时器 */
-	for(i = 11; i <= 15; i++){
-		timer[i] = timer_alloc();
-		timer_init(timer[i], &fifo32, i);
-		timer_settimer(timer[i], i * 100);
-	}
-
 
 	/* 频闪定时器 */
 	timer[0] = timer_alloc();
@@ -102,15 +100,11 @@ void HariMain(void)
 	
 	/* 窗口sheet */
 	sheetWin = sheet_alloc(sheetCtrl);
-	bufWin = (unsigned char *) memman_alloc_4k(memman, 144 * 52);
-	sheet_setbuf(sheetWin, bufWin, 144, 52, -1);
-	make_window8(sheetWin, 144, 52, "Count", 1);
+	make_window8(memman, sheetWin, 144, 52, "Count", 1);
 
 	/* Notepad sheet */
 	SHEET *sheetWinNotepad = sheet_alloc(sheetCtrl);
-	unsigned char *bufWinNotepad = (unsigned char *) memman_alloc_4k(memman, 160 * (20 + 30));
-	sheet_setbuf(sheetWinNotepad, bufWinNotepad, 160, 20 + 30, -1);
-	make_window8(sheetWinNotepad, 160, 20 + 30, "NotePad", 0);
+	make_window8(memman, sheetWinNotepad, 160, 20 + 30, "NotePad", 0);
 	make_textbox8(sheetWinNotepad, 8, 28, 144, 16, COL8_FFFFFF);
 
 	task_a = task_init(memman);
@@ -122,7 +116,7 @@ void HariMain(void)
 		buf_win_b = (unsigned char *) memman_alloc_4k(memman, 144 * 52);
 		sheet_setbuf(sheet_win_b[i], buf_win_b, 144, 52, -1);
 		sprintf(s, "task_b_%d", i);
-		make_window8(sheet_win_b[i], 144, 52, s, 0);
+		make_window8(memman, sheet_win_b[i], 144, 52, s, 0);
 		task_b[i] = task_alloc();
 		task_b[i]->tss.eip = (int) &task_b_main;
 		task_b[i]->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
@@ -135,11 +129,29 @@ void HariMain(void)
 		*((int *) (task_b[i]->tss.esp + 4)) = (int) sheet_win_b[i];
 		// task_run(task_b[i], 2, i + 1);
 	}
+
+
+	sheetCmd = sheet_alloc(sheetCtrl);
+	make_window8(memman, sheetCmd, 256, 165, "console", 0);
+	make_textbox8(sheetCmd, 8, 28, 240, 128, COL8_000000);
+	taskCmd = task_alloc();
+	taskCmd->tss.eip = (int) &console_task;
+	taskCmd->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
+	taskCmd->tss.es = 1 * 8;
+	taskCmd->tss.cs = 2 * 8;	/* GDT的2号 */
+	taskCmd->tss.ss = 1 * 8;
+	taskCmd->tss.ds = 1 * 8;
+	taskCmd->tss.fs = 1 * 8;
+	taskCmd->tss.gs = 1 * 8;
+	*((int *) (taskCmd->tss.esp + 4)) = (int) sheetCmd;
+	task_run(taskCmd, 2, 2);
+	// task_remove(taskCmd);
 	
 
 	sheet_slide(sheetBack, 0, 0);
 	sheet_slide(sheetWinNotepad, 80 + 160 + 5, 72 + 68 + 5);
 	sheet_slide(sheetWin, 108, 56);
+	sheet_slide(sheetCmd, 70, 200);
 	sheet_slide(sheet_win_b[0], 268, 56);
 	sheet_slide(sheet_win_b[1], 108, 116);
 	sheet_slide(sheet_win_b[2], 268, 116);
@@ -153,13 +165,15 @@ void HariMain(void)
 	sheet_updown(sheet_win_b[1], 2);
 	sheet_updown(sheet_win_b[2], 3);
 	sheet_updown(sheetWin, 4);
-	sheet_updown(sheetWinNotepad, 5);
-	sheet_updown(sheetMouse, 6);
+	sheet_updown(sheetCmd, 5);
+	sheet_updown(sheetWinNotepad, 6);
+	sheet_updown(sheetMouse, 7);
 	
 	sprintf(s, "[memery: %dMB; free: %dKB;]", memtotal / (1024 * 1024), memman_total(memman) / 1024);
 	putStrOnSheet(sheetBack, 0, 32, COL8_000084, s);
 
 	int count = 0;
+	
 	for (;;) {
 		count++;
 		sprintf(s, "%010d", count);
@@ -179,18 +193,15 @@ void HariMain(void)
 					timer_init(timer[0], &fifo32, i ^ 0x0000001);
 					timer_settimer(timer[0], 50);
 					cursor_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
-					putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8 - 1, 16 - 1, cursor_c);
+					putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
 					break;
 				case 3 :
 					putStrOnSheet(sheetBack, 0, 64, COL8_FFFFFF, "3 SEC");
+					
 					break;
 				case 10 :
 					putStrOnSheet(sheetBack, 0, 64, COL8_FFFFFF, "10 SEC");
 					// task_sleep(task_b);
-					break;
-				case 11 ... 15:
-					sprintf(s, "%02d SEC", i);
-					putStrOnSheet(sheetBack, 0, 64, COL8_FFFFFF, s);
 					break;
 				case 256 ... 511 :	/* 键盘 */										
 					sprintf(s, "%02X", i - 256);
@@ -277,6 +288,48 @@ void task_b_main(SHEET *sheet){
 			}
 		}
 	}
+}
+
+void console_task(SHEET *sheet){
+	FIFO32 fifo;
+	TIMER *timer;
+	TASK *task = task_current();
+
+	int i;
+	int fifobuf[128];
+	int cursor_x = 8, cursor_c = COL8_FFFFFF;
+
+	init_fifo32(&fifo, 128, fifobuf, task);
+
+	timer = timer_alloc();
+	timer_init(timer, &fifo, 1);
+	timer_settimer(timer, 50);
+
+	char s[40];
+	while(1){
+		
+		io_cli();
+		if(fifo32_status(&fifo) == 0){
+			task_sleep(task);
+			io_sti();
+		}else{
+			// putStrOnSheet(sheet, 20, 28, COL8_FFFFFF, "kkkkk");
+			i = fifo32_get(&fifo);
+			io_sti();
+			if(i <= 1){
+				if(i != 0){
+					timer_init(timer, &fifo, 0);
+					cursor_c = COL8_FFFFFF;
+				}else{
+					timer_init(timer, &fifo, 1);
+					cursor_c = COL8_000000;
+				}
+				timer_settimer(timer, 50);
+				putBoxOnSheet(sheet, cursor_x, 28, 8, 16, cursor_c);
+			}
+		}
+	}
+	
 }
 
 

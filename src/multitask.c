@@ -3,6 +3,8 @@
 TIMER *taskTimer;
 TASKCTRL *taskCtrl;
 
+void task_idle(void);
+
 TASK *task_init(MEMMAN *man){   /* 调用该函数以后，所有程序的运行都会被看作任务进行管理 */
     int i;
     TASK *task, *idle;
@@ -38,6 +40,7 @@ TASK *task_init(MEMMAN *man){   /* 调用该函数以后，所有程序的运行
     idle->tss.fs = 1 * 8;
     idle->tss.gs = 1 * 8;
     task_run(idle, MAX_TASKLEVELS-1, 1);
+
     return task;
 }
 
@@ -53,13 +56,12 @@ TASK *task_alloc(void){
             task->tss.ecx = 0;
             task->tss.edx = 0;
             task->tss.ebx = 0;
-            // task->tss.esp = task_b_esp_top;
             task->tss.ebp = 0;
             task->tss.esi = 0;
             task->tss.edi = 0;
             task->tss.es = 0;
             task->tss.cs = 0;	
-            task->tss.ss = 0;
+            // task->tss.ss = 0;
             task->tss.ds = 0;
             task->tss.fs = 0;
             task->tss.gs = 0;
@@ -88,24 +90,40 @@ void task_run(TASK *task, int level, int priority){
     return;
 }
 
-void task_switch(void){
-    TASKLEVEL *task_level = &taskCtrl->level[taskCtrl->cur_lv];
-    TASK *cur_task = task_level->tasks[task_level->current];
-    TASK *new_task;
-    task_level->current++;
-    if(task_level->current == task_level->running)
-        task_level->current = 0;
-    if(taskCtrl->lv_change != 0){   /* 需要重新获取task_level */
-        task_switch_preset();
-        task_level = &taskCtrl->level[taskCtrl->cur_lv];
+void task_add(TASK *task){
+    TASKLEVEL *task_level = &taskCtrl->level[task->level];  /* 注意是task->level而不是taskCtrl-cur_lv */
+    if(task_level->running < MAX_TASKS_LV){
+        task_level->tasks[task_level->running] = task;
+        task_level->running++;
+        task->flags = TASK_RUN;
     }
-    new_task = task_level->tasks[task_level->current];
 
-    timer_settimer(taskTimer, new_task->priority);
-    /* 当只有一个任务时，执行farjmp是原地跳转，CPU会认为这是错误命令，导致BUG，所以需要判断当前待运行的任务数 */
-    if(new_task != cur_task)
-        farjmp(0, task_level->tasks[task_level->current]->selector);
     return;
+}
+
+void task_remove(TASK *task){
+    int i;
+    /* 获得将要remove的活动所在的优先队列 */
+    TASKLEVEL *task_level = &taskCtrl->level[task->level];  /* 注意是task->level而不是taskCtrl-cur_lv */
+    /* 寻找task所在的位置 */
+    for(i = 0; i < task_level->running; i++)
+        if(task_level->tasks[i] == task)
+            break;
+    /* 活动对应优先队列待运行活动数减一 */
+    task_level->running--;
+
+    if(i < task_level->current)
+        task_level->current--;
+    if(task_level->current >= task_level->running)  /* 如果current的值出现异常，则修正 */
+        task_level->current = 0;
+    
+    /* 修改remove的活动状态 */
+    task->flags = TASK_ALLOC;
+
+    for(; i < task_level->running; i++)
+        task_level->tasks[i] = task_level->tasks[i + 1];
+    
+    return;    
 }
 
 void task_sleep(TASK *task){
@@ -128,39 +146,6 @@ TASK *task_current(void){
     return task_level->tasks[task_level->current];
 }
 
-void task_add(TASK *task){
-    TASKLEVEL *task_level = &taskCtrl->level[task->level];
-    if(task_level->running < MAX_TASKS_LV){
-        task_level->tasks[task_level->running] = task;
-        task_level->running++;
-        task->flags = TASK_RUN;
-    }
-
-    return;
-}
-
-void task_remove(TASK *task){
-    int i;
-    TASKLEVEL *task_level = &taskCtrl->level[taskCtrl->cur_lv];
-    /* 寻找task所在的位置 */
-    for(i = 0; i < task_level->running; i++)
-        if(task_level->tasks[i] == task)
-            break;
-    task_level->running--;
-
-    if(i < task_level->current)
-        task_level->current--;
-    if(task_level->current >= task_level->running)  /* 如果current的值出现异常，则修正 */
-        task_level->current = 0;
-    
-    task->flags = TASK_ALLOC;
-
-    for(; i < task_level->running; i++)
-        task_level->tasks[i] = task_level->tasks[i + 1];
-    
-    return;    
-}
-
 void task_switch_preset(void){
     int i;
     for(i = 0; i < MAX_TASKLEVELS; i++)
@@ -171,7 +156,28 @@ void task_switch_preset(void){
     return;
 }
 
+void task_switch(void){
+    TASKLEVEL *task_level = &taskCtrl->level[taskCtrl->cur_lv];
+    TASK *cur_task = task_level->tasks[task_level->current];
+    TASK *new_task;
+    task_level->current++;
+    if(task_level->current == task_level->running)
+        task_level->current = 0;
+    if(taskCtrl->lv_change != 0){   /* 需要重新获取task_level */
+        task_switch_preset();
+        task_level = &taskCtrl->level[taskCtrl->cur_lv];
+    }
+    new_task = task_level->tasks[task_level->current];
+
+    timer_settimer(taskTimer, new_task->priority);
+    /* 当只有一个任务时，执行farjmp是原地跳转，CPU会认为这是错误命令，导致BUG，所以需要判断当前待运行的任务数 */
+    if(new_task != cur_task)
+        farjmp(0, new_task->selector);
+    return;
+}
+
+
 void task_idle(void){
     for(;;)
-        io_hlt;
+        io_hlt();   /* 记得加括号，不要写成 io_hlt; */
 }
