@@ -279,6 +279,12 @@ void HariMain(void)
 						sheet_refresh(sheetWinNotepad, 0, 0, sheetWinNotepad->bxsize, 21);
 						sheet_refresh(sheetCmd, 0, 0, sheetCmd->bxsize, 21);
 					}
+					if(i - 256 == 0x1c){	/* 回车键 */
+						if(key_to != 0){
+							fifo32_put(&taskCmd->fifo, 10 + 256);
+						}
+					}
+
 					if(i - 256 == 0x2a){	/* 左shift键 ON */
 						key_shift |= 1;
 					}
@@ -395,10 +401,10 @@ void console_task(SHEET *sheet){
 	TIMER *timer;
 	TASK *task = task_current();
 
-	int i;
+	int i, x, y;
 	char s[2];
 	int fifobuf[128];
-	int cursor_x = 16, cursor_c = -1;
+	int cursor_x = 16, cursor_y = 28, cursor_c = -1;
 
 	init_fifo32(&task->fifo, 128, fifobuf, task);
 
@@ -407,7 +413,7 @@ void console_task(SHEET *sheet){
 	timer_settimer(timer, 50);
 
 	/* 显示提示符 */
-	putStrOnSheet(sheet, 8, 28, COL8_FFFFFF, ">");
+	putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, ">");
 
 	while(1){	
 		io_cli();
@@ -429,8 +435,6 @@ void console_task(SHEET *sheet){
 					
 					break;
 				case 2: case 3 :
-					sprintf(s, "%d", i);
-					putStrOnSheet(sheet, 30, 28, COL8_FFFFFF, s);
 					cursor_c = i == 2 ? COL8_FFFFFF : -1;
 					if(i == 3) 
 						putBoxOnSheet(sheet, cursor_x, 28, 8, 16, COL8_000000);
@@ -438,14 +442,33 @@ void console_task(SHEET *sheet){
 				case 256 ... 511:
 					if(i == 8 + 256){	/* 退格键 */
 						if(cursor_x > 2 * 8){
-							putStrOnSheet_BG(sheet, cursor_x, 20 + 8, COL8_000000, COL8_000000, " ");
+							putStrOnSheet_BG(sheet, cursor_x, cursor_y, COL8_000000, COL8_000000, " ");
 							cursor_x -= 8;
 						}
+					}else if(i == 10 + 256){	/* 回车键 */
+						putStrOnSheet_BG(sheet, cursor_x, cursor_y, COL8_000000, COL8_000000, " ");
+						if(cursor_y < 28 + 112){
+							cursor_y += 16;
+						}else{	/* 滚动 */
+							/* 除第一行往上移一行 */
+							for(y = 28; y < 28 + 112; y++)
+								for(x = 8; x < 8 + 240; x++)
+									sheet->buf[x + sheet->bxsize * y] = sheet->buf[x + sheet->bxsize * (y + 16)];
+							/* 最后一行涂黑 */
+							for(y = 28 + 112; y < 28 + 128; y++)	
+								for(x = 8; x < 8 + 240; x++)
+									sheet->buf[x + sheet->bxsize * y] = COL8_000000;
+							sheet_refresh(sheet, 8, 28, 8 + 240, 28 + 128);
+						}
+						/* 显示提示符 */
+						putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, ">");
+						cursor_x = 16;
+
 					}else{	/* 一般字符 */
 						if(cursor_x < 30 * 8){
 							s[0] = i - 256;
 							s[1] = 0;
-							putStrOnSheet_BG(sheet, cursor_x, 20 + 8, COL8_FFFFFF, COL8_000000, s);
+							putStrOnSheet_BG(sheet, cursor_x, cursor_y, COL8_FFFFFF, COL8_000000, s);
 							cursor_x += 8;
 						}
 					}
@@ -455,7 +478,7 @@ void console_task(SHEET *sheet){
 			}	
 
 			if(cursor_c >= 0)
-				putBoxOnSheet(sheet, cursor_x, 28, 8, 16, cursor_c);
+				putBoxOnSheet(sheet, cursor_x, cursor_y, 8, 16, cursor_c);
 
 		}
 	}
