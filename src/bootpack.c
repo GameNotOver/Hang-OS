@@ -1,10 +1,11 @@
 /* bootpack的主要部分 */
 
 #include <stdio.h>
+#include <string.h>
 #include "../include/function.h"
 
 // void task_b_main(SHEET *sheet);
-void console_task(SHEET *sheet);
+void console_task(SHEET *sheet, unsigned int memtotal);
 
 void HariMain(void)
 {
@@ -111,11 +112,11 @@ void HariMain(void)
 	
 	/* 窗口sheet */
 	sheetWin = sheet_alloc(sheetCtrl);
-	make_window8(memman, sheetWin, 144, 52, "Count", 0);
+	make_window8(sheetWin, 144, 52, "Count", 0);
 
 	/* Notepad sheet */
 	SHEET *sheetWinNotepad = sheet_alloc(sheetCtrl);
-	make_window8(memman, sheetWinNotepad, 160, 20 + 30, "NotePad", 1);
+	make_window8(sheetWinNotepad, 160, 20 + 30, "NotePad", 1);
 	make_textbox8(sheetWinNotepad, 8, 28, 144, 16, COL8_FFFFFF);
 
 	task_a = task_init(memman);
@@ -141,11 +142,11 @@ void HariMain(void)
 
 
 	sheetCmd = sheet_alloc(sheetCtrl);
-	make_window8(memman, sheetCmd, 256, 165, "console", 0);
+	make_window8(sheetCmd, 256, 165, "console", 0);
 	make_textbox8(sheetCmd, 8, 28, 240, 128, COL8_000000);
 	taskCmd = task_alloc();
 	taskCmd->tss.eip = (int) &console_task;
-	taskCmd->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
+	taskCmd->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 12;
 	taskCmd->tss.es = 1 * 8;
 	taskCmd->tss.cs = 2 * 8;	/* GDT的2号 */
 	taskCmd->tss.ss = 1 * 8;
@@ -153,6 +154,7 @@ void HariMain(void)
 	taskCmd->tss.fs = 1 * 8;
 	taskCmd->tss.gs = 1 * 8;
 	*((int *) (taskCmd->tss.esp + 4)) = (int) sheetCmd;
+	*((int *) (taskCmd->tss.esp + 8)) = memtotal;
 	task_run(taskCmd, 2, 2);
 	// task_remove(taskCmd);
 	
@@ -178,8 +180,8 @@ void HariMain(void)
 	sheet_updown(sheetWinNotepad, 6);
 	sheet_updown(sheetMouse, 7);
 	
-	sprintf(s, "[memery: %dMB; free: %dKB;]", memtotal / (1024 * 1024), memman_total(memman) / 1024);
-	putStrOnSheet(sheetBack, 0, 32, COL8_000084, s);
+	// sprintf(s, "[memery: %dMB; free: %dKB;]", memtotal / (1024 * 1024), memman_total(memman) / 1024);
+	// putStrOnSheet(sheetBack, 0, 32, COL8_000084, s);
 
 	int count = 0;
 	
@@ -328,15 +330,15 @@ void HariMain(void)
 					break;
 				case 512 ... 767 :	/* 鼠标 */		
 					if(mouse_decode(&mdec, i - 512) != 0){
-						sprintf(s, "[    %4d %4d]", mdec.x, mdec.y);
-						if((mdec.btn & 0x01) != 0)
-							s[1] = 'L';
-						if((mdec.btn & 0x02) != 0)
-							s[3] = 'R';
-						if((mdec.btn & 0x04) != 0)
-							s[2] = 'C';
+						// sprintf(s, "[    %4d %4d]", mdec.x, mdec.y);
+						// if((mdec.btn & 0x01) != 0)
+						// 	s[1] = 'L';
+						// if((mdec.btn & 0x02) != 0)
+						// 	s[3] = 'R';
+						// if((mdec.btn & 0x04) != 0)
+						// 	s[2] = 'C';
 
-						putStrOnSheet(sheetBack, 32, 16, COL8_FFFFFF, s);
+						// putStrOnSheet(sheetBack, 32, 16, COL8_FFFFFF, s);
 
 						mx += mdec.x;
 						my += mdec.y;
@@ -396,13 +398,14 @@ void HariMain(void)
 // 	}
 // }
 
-void console_task(SHEET *sheet){
+void console_task(SHEET *sheet, unsigned int memtotal){
 
 	TIMER *timer;
 	TASK *task = task_current();
+	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 
 	int i, x, y;
-	char s[2];
+	char s[30], cmdline[30];
 	int fifobuf[128];
 	int cursor_x = 16, cursor_y = 28, cursor_c = -1;
 
@@ -447,19 +450,26 @@ void console_task(SHEET *sheet){
 						}
 					}else if(i == 10 + 256){	/* 回车键 */
 						putStrOnSheet_BG(sheet, cursor_x, cursor_y, COL8_000000, COL8_000000, " ");
-						if(cursor_y < 28 + 112){
-							cursor_y += 16;
-						}else{	/* 滚动 */
-							/* 除第一行往上移一行 */
-							for(y = 28; y < 28 + 112; y++)
-								for(x = 8; x < 8 + 240; x++)
-									sheet->buf[x + sheet->bxsize * y] = sheet->buf[x + sheet->bxsize * (y + 16)];
-							/* 最后一行涂黑 */
-							for(y = 28 + 112; y < 28 + 128; y++)	
-								for(x = 8; x < 8 + 240; x++)
-									sheet->buf[x + sheet->bxsize * y] = COL8_000000;
-							sheet_refresh(sheet, 8, 28, 8 + 240, 28 + 128);
+
+						cmdline[cursor_x / 8 - 2] = 0;
+						cursor_y = cons_newline(cursor_y, sheet);
+						/* 执行命令 */
+						if(strcmp(cmdline, "mem") == 0){
+							sprintf(s, "totle: %dMB", memtotal / (1024 * 1024));
+							putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, s);
+							cursor_y = cons_newline(cursor_y, sheet);
+							sprintf(s, "free: %dKB", memman_total(memman) / 1024);
+							putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, s);
+							cursor_y = cons_newline(cursor_y, sheet);
+							cursor_y = cons_newline(cursor_y, sheet);
+						}else if(cmdline[0] != 0){
+							/* 既不是命令也不是空行 */
+							putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, "Bad command.");
+							cursor_y = cons_newline(cursor_y, sheet);
+							cursor_y = cons_newline(cursor_y, sheet);
 						}
+
+
 						/* 显示提示符 */
 						putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, ">");
 						cursor_x = 16;
@@ -468,6 +478,7 @@ void console_task(SHEET *sheet){
 						if(cursor_x < 30 * 8){
 							s[0] = i - 256;
 							s[1] = 0;
+							cmdline[cursor_x / 8 - 2] = i - 256;
 							putStrOnSheet_BG(sheet, cursor_x, cursor_y, COL8_FFFFFF, COL8_000000, s);
 							cursor_x += 8;
 						}

@@ -36,7 +36,7 @@ void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str);
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color);
 void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, char *str);
 
-void make_window8(MEMMAN *man, SHEET *sheet, int xsize, int ysize, char *title, char act);
+void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act);
 void set_win_title_bar(SHEET *sheet, char *title, char act);
 void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c);
 
@@ -113,5 +113,8 @@ TASK *task_current(void);
 void task_add(TASK *task);
 void task_remove(TASK *task);
 void task_switch_preset(void);
+
+/* command.c */
+int cons_newline(int cursor_y, SHEET *sheet);
 
 #endif

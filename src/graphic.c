@@ -123,9 +123,11 @@ void putblock8_8(char *vram, int vxsize, int pxsize,
 	return;
 }
 
-void make_window8(MEMMAN *man, SHEET *sheet, int xsize, int ysize, char *title, char act){
+void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act){
 
-	BUFFER buf = (BUFFER) memman_alloc_4k(man, xsize * ysize);
+	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
+
+	BUFFER buf = (BUFFER) memman_alloc_4k(memman, xsize * ysize);
 	sheet_setbuf(sheet, buf, xsize, ysize, -1);
 
 	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         xsize - 1, 0        );
