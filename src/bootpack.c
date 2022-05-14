@@ -13,11 +13,10 @@ void HariMain(void)
 	int mx, my;
 
 	/* 	fifo32 分配：
-		0~1：	光标闪烁用定时器
-		3： 	3秒定时器
-		10：	10秒定时器
-		256~511	键盘输入（256 bits）
-		512~767	鼠标输入（256 bits）
+		0x00、0xff：光标闪烁用定时器
+		1 ~ 10		1 ~ 10秒定时器
+		256~511		键盘输入（256 bits）
+		512~767		鼠标输入（256 bits）
 		*/
 	FIFO32 fifo32, keyCmdFifo;
 	int fifo32buf[128], keyCmdBuf[32];
@@ -43,6 +42,8 @@ void HariMain(void)
 
 	SHEET *sheetCmd;
 	TASK *taskCmd;
+
+	SHEET *mouseMove[2];
 
 	int i;
 	
@@ -159,6 +160,11 @@ void HariMain(void)
 
 	int count = 0;
 	int second_counter = 0;
+
+	mouseMove[0] = sheetWinNotepad;
+	mouseMove[1] = sheetCmd;
+	int curMove = 0;
+
 	for (;;) {
 		count++;
 		sprintf(s, "%010d", count);
@@ -237,6 +243,8 @@ void HariMain(void)
 						
 					}
 					if(i - 256 == 0x0f){	/* Tab键 */
+						curMove = curMove == 0 ? 1 : 0;
+						// sheet_updown(mouseMove[curMove], 6);
 						if(key_to == 0){
 							key_to = 1;
 							set_win_title_bar(sheetWinNotepad, "NotePad", 0);
@@ -320,7 +328,7 @@ void HariMain(void)
 						sheet_slide(sheetMouse, mx, my);
 
 						if((mdec.btn & 0x01) != 0){	/* 按下左键 */
-							sheet_slide(sheetWinNotepad, mx - 80, my -8);
+							sheet_slide(mouseMove[curMove], mx - 80, my -8);
 						}
 					}
 					break;
@@ -341,7 +349,7 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 	FILEINFO *finfo = (FILEINFO *) (ADR_DISKIMG + 0x002600);
 
 	int i, x, y;
-	char s[30], cmdline[30];
+	char s[30], cmdline[30], *p;
 	int fifobuf[128];
 	int cursor_x = 16, cursor_y = 28, cursor_c = -1;
 
@@ -423,9 +431,78 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 								}
 							}
 							cursor_y = cons_newline(cursor_y, sheet);
+						}else if(cmdline[0] == 'c' && cmdline[1] == 'a' && cmdline[2] == 't' && cmdline[3] == ' '){
+							for(y = 0; y <11; y++){
+								s[y] = ' ';
+							}
+							y = 0;
+							s[11] = 0;
+							for(x = 4; y < 11 && cmdline[x] != 0; x++){
+								if(cmdline[x] == '.' && y <= 8){
+									y = 8;
+								}else{
+									s[y] = cmdline[x];
+									if('a' <= s[y] && s[y] <= 'z')
+										s[y] -= 0x20;
+									y++;
+								}
+							}
+							// putStrOnSheet(sheet, 30, 30, COL8_FFFFFF, s);
+							/* 寻找文件 */
+							for(x = 0; x < 244; ){
+								if(finfo[x].name[0] == 0x00)
+									break;
+								if((finfo[x].type & 0x18) == 0){
+									for(y = 0; y < 11; y++){
+										if(finfo[x].name[y] != s[y])
+											goto type_next_file;
+									}
+									break; /* 找到文件 */
+								}
+							type_next_file:
+								x++;
+							}
+							if(x < 224 && finfo[x].name[0] != 0x00){	/* 找到文件的情况 */
+								y = finfo[x].size;
+								p = (char *) (finfo[x].clustno * 512 + 0x003e00 + ADR_DISKIMG);
+								cursor_x = 8;
+								for(x = 0; x < y; x++){
+									s[0] = p[x];
+									s[1] = 0;
+									if(s[0] == 0x09){ /* 水平制表符 */
+										for(;;){
+											putStrOnSheet(sheet, cursor_x, cursor_y, COL8_FFFFFF, " ");
+											cursor_x += 8;
+											if(cursor_x == 8 +240){
+												cursor_x = 8;
+												cursor_y = cons_newline(cursor_y, sheet);
+											}
+											if(((cursor_x - 8) & 0x1f) == 0)
+												break;	/* 能被32整除则break; */
+										}
+									}else if(s[0] == 0x0a){	/* 换行 */
+										cursor_x = 8;
+										cursor_y = cons_newline(cursor_y, sheet);
+									}else if(s[0] == 0x0d){	/* 回车 */
+
+									}else{	/* 一般字符 */
+										putStrOnSheet(sheet, cursor_x, cursor_y, COL8_FFFFFF, s);
+										cursor_x += 8;
+										if(cursor_x == 8 + 240){	/* 到达最右端换行 */
+											cursor_x = 8;
+											cursor_y = cons_newline(cursor_y, sheet);
+										}
+									}
+									
+								}
+							}else{	/* 没有找到文件的情况 */
+								putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, "File Not Found!");
+								cursor_y = cons_newline(cursor_y, sheet);
+							}
+							cursor_y = cons_newline(cursor_y, sheet);
 						}else if(cmdline[0] != 0){
 							/* 既不是命令也不是空行 */
-							putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, "Bad command.");
+							putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, "Bad command!");
 							cursor_y = cons_newline(cursor_y, sheet);
 							cursor_y = cons_newline(cursor_y, sheet);
 						}
