@@ -124,16 +124,6 @@ void putblock8_8(char *vram, int vxsize, int pxsize,
 }
 
 void make_window8(MEMMAN *man, SHEET *sheet, int xsize, int ysize, char *title, char act){
-	extern char closebtn[14][16];
-	int x, y;
-	char c, tc, tbc;
-	if(act != 0){
-		tc = COL8_FFFFFF;
-		tbc = COL8_000084;
-	}else{
-		tc = COL8_C6C6C6;
-		tbc = COL8_848484;
-	}
 
 	BUFFER buf = (BUFFER) memman_alloc_4k(man, xsize * ysize);
 	sheet_setbuf(sheet, buf, xsize, ysize, -1);
@@ -145,10 +135,25 @@ void make_window8(MEMMAN *man, SHEET *sheet, int xsize, int ysize, char *title, 
 	boxfill8(buf, xsize, COL8_848484, xsize - 2, 1,         xsize - 2, ysize - 2);
 	boxfill8(buf, xsize, COL8_000000, xsize - 1, 0,         xsize - 1, ysize - 1);
 	boxfill8(buf, xsize, COL8_C6C6C6, 2,         2,         xsize - 3, ysize - 3);
-	boxfill8(buf, xsize, tbc, 		  3,         3,         xsize - 4, 20       );
 	boxfill8(buf, xsize, COL8_848484, 1,         ysize - 2, xsize - 2, ysize - 2);
 	boxfill8(buf, xsize, COL8_000000, 0,         ysize - 1, xsize - 1, ysize - 1);
-	putfonts8_asc(buf, xsize, 24, 4, tc, title);
+
+	set_win_title_bar(sheet, title, act);
+}
+
+void set_win_title_bar(SHEET *sheet, char *title, char act){
+	int x, y;
+	char c, title_color, title_bar_color;
+	if(act != 0){
+		title_color = COL8_FFFFFF;
+		title_bar_color = COL8_000084;
+	}else{
+		title_color = COL8_C6C6C6;
+		title_bar_color = COL8_848484;
+	}
+	extern char closebtn[14][16];
+	boxfill8(sheet->buf, sheet->bxsize, title_bar_color, 3, 3, sheet->bxsize - 4, 20);
+	putfonts8_asc(sheet->buf, sheet->bxsize, 24, 4, title_color, title);
 	for(y = 0; y < 14; y++){
 		for(x = 0; x < 16; x++){
 			c = closebtn[y][x];
@@ -168,7 +173,7 @@ void make_window8(MEMMAN *man, SHEET *sheet, int xsize, int ysize, char *title, 
 				default:
 					break;
 			}
-			buf[(5 + y) * xsize + (xsize - 21 + x)] = c;
+			sheet->buf[(5 + y) * sheet->bxsize + (sheet->bxsize - 21 + x)] = c;
 		}
 	}
 }

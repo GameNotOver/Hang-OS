@@ -1,7 +1,9 @@
 #ifndef CONST_H
 #define CONST_H
 
+#ifndef NULL
 #define NULL			0
+#endif
 
 #define COL8_000000		0 		// BLACK			
 #define COL8_FF0000		1 		// LIGHT_RED		
@@ -199,6 +201,7 @@ typedef struct TASK {
 	int selector;		/* GDT的编号 */
 	int flags;	
 	int level, priority;
+	FIFO32 fifo;
 	TSS32 tss;
 } TASK;
 

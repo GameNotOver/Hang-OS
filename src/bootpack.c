@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include "../include/function.h"
 
-void task_b_main(SHEET *sheet);
+// void task_b_main(SHEET *sheet);
 void console_task(SHEET *sheet);
 
 void HariMain(void)
@@ -30,7 +30,7 @@ void HariMain(void)
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	SHEETCTRL *sheetCtrl;
 	SHEET *sheetBack, *sheetMouse, *sheetWin, *sheet_win_b[3];
-	unsigned char *bufBack, bufMouse[256], *bufWin, *buf_win_b;
+	unsigned char *bufBack, bufMouse[256];
 
 	TIMER *timer[11];
 
@@ -39,11 +39,11 @@ void HariMain(void)
 	TASK *task_a, *task_b[3];
 
 	SHEET *sheetCmd;
-	unsigned *bufCmd;
 	TASK *taskCmd;
 
 
 	int i;
+	int key_to = 0;
 
 	init_gdtidt();
 	init_pic();
@@ -100,35 +100,33 @@ void HariMain(void)
 	
 	/* 窗口sheet */
 	sheetWin = sheet_alloc(sheetCtrl);
-	make_window8(memman, sheetWin, 144, 52, "Count", 1);
+	make_window8(memman, sheetWin, 144, 52, "Count", 0);
 
 	/* Notepad sheet */
 	SHEET *sheetWinNotepad = sheet_alloc(sheetCtrl);
-	make_window8(memman, sheetWinNotepad, 160, 20 + 30, "NotePad", 0);
+	make_window8(memman, sheetWinNotepad, 160, 20 + 30, "NotePad", 1);
 	make_textbox8(sheetWinNotepad, 8, 28, 144, 16, COL8_FFFFFF);
 
 	task_a = task_init(memman);
 	fifo32.task = task_a;
 	task_run(task_a, 1, 0);
 
-	for(i = 0; i < 3; i++){
-		sheet_win_b[i] = sheet_alloc(sheetCtrl);
-		buf_win_b = (unsigned char *) memman_alloc_4k(memman, 144 * 52);
-		sheet_setbuf(sheet_win_b[i], buf_win_b, 144, 52, -1);
-		sprintf(s, "task_b_%d", i);
-		make_window8(memman, sheet_win_b[i], 144, 52, s, 0);
-		task_b[i] = task_alloc();
-		task_b[i]->tss.eip = (int) &task_b_main;
-		task_b[i]->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
-		task_b[i]->tss.es = 1 * 8;
-		task_b[i]->tss.cs = 2 * 8;	/* GDT的2号 */
-		task_b[i]->tss.ss = 1 * 8;
-		task_b[i]->tss.ds = 1 * 8;
-		task_b[i]->tss.fs = 1 * 8;
-		task_b[i]->tss.gs = 1 * 8;
-		*((int *) (task_b[i]->tss.esp + 4)) = (int) sheet_win_b[i];
-		// task_run(task_b[i], 2, i + 1);
-	}
+	// for(i = 0; i < 3; i++){
+	// 	sheet_win_b[i] = sheet_alloc(sheetCtrl);
+	// 	sprintf(s, "task_b_%d", i);
+	// 	make_window8(memman, sheet_win_b[i], 144, 52, s, 0);
+	// 	task_b[i] = task_alloc();
+	// 	task_b[i]->tss.eip = (int) &task_b_main;
+	// 	task_b[i]->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
+	// 	task_b[i]->tss.es = 1 * 8;
+	// 	task_b[i]->tss.cs = 2 * 8;	/* GDT的2号 */
+	// 	task_b[i]->tss.ss = 1 * 8;
+	// 	task_b[i]->tss.ds = 1 * 8;
+	// 	task_b[i]->tss.fs = 1 * 8;
+	// 	task_b[i]->tss.gs = 1 * 8;
+	// 	*((int *) (task_b[i]->tss.esp + 4)) = (int) sheet_win_b[i];
+	// 	// task_run(task_b[i], 2, i + 1);
+	// }
 
 
 	sheetCmd = sheet_alloc(sheetCtrl);
@@ -205,20 +203,45 @@ void HariMain(void)
 					break;
 				case 256 ... 511 :	/* 键盘 */										
 					sprintf(s, "%02X", i - 256);
-					sprintf(s, "%d", cursor_x);
 					putStrOnSheet(sheetBack, 0, 16, COL8_FFFFFF, s);
-					if(i < 256 + 0x54){
-						if(keytable[i - 256] != 0 && cursor_x < 8 * 18){
-							s[0] = keytable[i - 256];
-							s[1] = 0;
-							putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_000000, COL8_FFFFFF, s);
-							cursor_x += 8;
+					if(i < 256 + 0x54 && keytable[i - 256] != 0){	/* 一般字符 */
+						if(key_to == 0){		/* 发送给任务a */
+							if(cursor_x < 8 * 18){
+								s[0] = keytable[i - 256];
+								s[1] = 0;
+								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_000000, COL8_FFFFFF, s);
+								cursor_x += 8;
+							}
+						}else{
+							/* 为了不与键盘数据冲突， 在写入fifo时将键盘数值加256 */ 
+							fifo32_put(&taskCmd->fifo, keytable[i - 256] + 256);
 						}
 					}
-					if(i - 256 == 0x0e && cursor_x > 8)	{	/* 退格键 */
-						putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_FFFFFF, COL8_FFFFFF, " ");
-						cursor_x -= 8;
+					if(i - 256 == 0x0e)	{	/* 退格键 */
+						if(key_to == 0){	/* 发送给任务a */
+							if(cursor_x > 8){
+								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_FFFFFF, COL8_FFFFFF, " ");
+								cursor_x -= 8;
+							}
+						}else{
+							fifo32_put(&taskCmd->fifo, 8 + 256);
+						}
+						
 					}
+					if(i - 256 == 0x0f){	/* Tab键 */
+						if(key_to == 0){
+							key_to = 1;
+							set_win_title_bar(sheetWinNotepad, "NotePad", 0);
+							set_win_title_bar(sheetCmd, "Console", 1);
+						}else{
+							key_to = 0;
+							set_win_title_bar(sheetWinNotepad, "NotePad", 1);
+							set_win_title_bar(sheetCmd, "Console", 0);
+						}
+						sheet_refresh(sheetWinNotepad, 0, 0, sheetWinNotepad->bxsize, 21);
+						sheet_refresh(sheetCmd, 0, 0, sheetCmd->bxsize, 21);
+					}
+					putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
 					break;
 				case 512 ... 767 :	/* 鼠标 */		
 					if(mouse_decode(&mdec, i - 512) != 0){
@@ -257,76 +280,99 @@ void HariMain(void)
 	}
 }
 
-void task_b_main(SHEET *sheet){
-	FIFO32 fifo;
-	TIMER *timer_put_str;
-	int fifobuf[128];
-	int i;
-	int count = 0, count0 = 0;
-	char s[40];
+// void task_b_main(SHEET *sheet){
+// 	FIFO32 fifo;
+// 	TIMER *timer_put_str;
+// 	int fifobuf[128];
+// 	int i;
+// 	int count = 0, count0 = 0;
+// 	char s[40];
 
-	init_fifo32(&fifo, 128, fifobuf, NULL);
+// 	init_fifo32(&fifo, 128, fifobuf, NULL);
 
-	timer_put_str = timer_alloc();
-	timer_init(timer_put_str, &fifo, 100);
-	timer_settimer(timer_put_str, 100);
+// 	timer_put_str = timer_alloc();
+// 	timer_init(timer_put_str, &fifo, 100);
+// 	timer_settimer(timer_put_str, 100);
 
-	for(;;) { 
-		count++;
+// 	for(;;) { 
+// 		count++;
 
-		io_cli();
-		if(fifo32_status(&fifo) == 0){
-			io_sti();
-		}else{
-			i = fifo32_get(&fifo);
-			io_sti();
-			if(i == 100){
-				sprintf(s, "%11d", count - count0);
-				putStrOnSheet(sheet, 24, 28, COL8_000000, s);
-				count0 = count;
-				timer_settimer(timer_put_str, 100);
-			}
-		}
-	}
-}
+// 		io_cli();
+// 		if(fifo32_status(&fifo) == 0){
+// 			io_sti();
+// 		}else{
+// 			i = fifo32_get(&fifo);
+// 			io_sti();
+// 			if(i == 100){
+// 				sprintf(s, "%11d", count - count0);
+// 				putStrOnSheet(sheet, 24, 28, COL8_000000, s);
+// 				count0 = count;
+// 				timer_settimer(timer_put_str, 100);
+// 			}
+// 		}
+// 	}
+// }
 
 void console_task(SHEET *sheet){
-	FIFO32 fifo;
+
 	TIMER *timer;
 	TASK *task = task_current();
 
 	int i;
+	char s[2];
 	int fifobuf[128];
-	int cursor_x = 8, cursor_c = COL8_FFFFFF;
+	int cursor_x = 16, cursor_c = COL8_FFFFFF;
 
-	init_fifo32(&fifo, 128, fifobuf, task);
+	init_fifo32(&task->fifo, 128, fifobuf, task);
 
 	timer = timer_alloc();
-	timer_init(timer, &fifo, 1);
+	timer_init(timer, &task->fifo, 1);
 	timer_settimer(timer, 50);
 
-	char s[40];
-	while(1){
-		
+	/* 显示提示符 */
+	putStrOnSheet(sheet, 8, 28, COL8_FFFFFF, ">");
+
+	while(1){	
 		io_cli();
-		if(fifo32_status(&fifo) == 0){
+		if(fifo32_status(&task->fifo) == 0){
 			task_sleep(task);
 			io_sti();
 		}else{
 			// putStrOnSheet(sheet, 20, 28, COL8_FFFFFF, "kkkkk");
-			i = fifo32_get(&fifo);
+			i = fifo32_get(&task->fifo);
 			io_sti();
-			if(i <= 1){
-				if(i != 0){
-					timer_init(timer, &fifo, 0);
-					cursor_c = COL8_FFFFFF;
-				}else{
-					timer_init(timer, &fifo, 1);
-					cursor_c = COL8_000000;
-				}
-				timer_settimer(timer, 50);
-				putBoxOnSheet(sheet, cursor_x, 28, 8, 16, cursor_c);
+
+			switch(i){
+				case 0: case 1:
+					if(i != 0){
+						timer_init(timer, &task->fifo, 0);
+						cursor_c = COL8_FFFFFF;
+					}else{
+						timer_init(timer, &task->fifo, 1);
+						cursor_c = COL8_000000;
+					}
+					putBoxOnSheet(sheet, cursor_x, 28, 8, 16, cursor_c);
+					timer_settimer(timer, 50);
+					break;
+				case 256 ... 511:
+					if(i == 8 + 256){	/* 退格键 */
+						if(cursor_x > 2 * 8){
+							putStrOnSheet_BG(sheet, cursor_x, 20 + 8, COL8_000000, COL8_000000, " ");
+							cursor_x -= 8;
+						}
+					}else{	/* 一般字符 */
+						if(cursor_x < 30 * 8){
+							s[0] = i - 256;
+							s[1] = 0;
+							putStrOnSheet_BG(sheet, cursor_x, 20 + 8, COL8_FFFFFF, COL8_000000, s);
+							cursor_x += 8;
+						}
+					}
+					break;
+				default:
+					break;
 			}
+
 		}
 	}
 	
