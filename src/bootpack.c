@@ -347,6 +347,7 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 	TASK *task = task_current();
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	FILEINFO *finfo = (FILEINFO *) (ADR_DISKIMG + 0x002600);
+	int *fat = (int *) memman_alloc_4k(memman, 4 * 2880);
 
 	int i, x, y;
 	char s[30], cmdline[30], *p;
@@ -361,6 +362,10 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 
 	/* 显示提示符 */
 	putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, ">");
+
+	unsigned char *img_fat = (unsigned char *) (ADR_DISKIMG + 0x000200);
+	char *img_file = (char *) (ADR_DISKIMG + 0x003e00);
+	file_readfat(fat, img_fat);
 
 	while(1){	
 		io_cli();
@@ -463,11 +468,13 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 								x++;
 							}
 							if(x < 224 && finfo[x].name[0] != 0x00){	/* 找到文件的情况 */
-								y = finfo[x].size;
-								p = (char *) (finfo[x].clustno * 512 + 0x003e00 + ADR_DISKIMG);
+								// y = finfo[x].size;
+								// p = (char *) (finfo[x].clustno * 512 + 0x003e00 + ADR_DISKIMG);
+								p = (char *) memman_alloc_4k(memman, finfo[x].size);
+								file_loadfile(finfo[x].clustno, finfo[x].size, p, fat, img_file);
 								cursor_x = 8;
-								for(x = 0; x < y; x++){
-									s[0] = p[x];
+								for(y = 0; y < finfo[x].size; y++){
+									s[0] = p[y];
 									s[1] = 0;
 									if(s[0] == 0x09){ /* 水平制表符 */
 										for(;;){
@@ -495,6 +502,7 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 									}
 									
 								}
+								memman_free(memman, (int) p, finfo[x].size);
 							}else{	/* 没有找到文件的情况 */
 								putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, "File Not Found!");
 								cursor_y = cons_newline(cursor_y, sheet);

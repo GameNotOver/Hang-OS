@@ -21,7 +21,7 @@ HEDPATH  = ./include/
 
 OBJS_BOOTPACK =	bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
-	data.obj timer.obj multitask.obj command.obj
+	data.obj timer.obj multitask.obj command.obj file.obj
 
 # 默认动作
 

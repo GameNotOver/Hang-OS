@@ -117,4 +117,8 @@ void task_switch_preset(void);
 /* command.c */
 int cons_newline(int cursor_y, SHEET *sheet);
 
+/* file.c */
+void file_readfat(int *fat, unsigned char *img);
+void file_loadfile(int clustno, int size, char *buf, int *fat, char *img);
+
 #endif
