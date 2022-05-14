@@ -462,6 +462,12 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 							putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, s);
 							cursor_y = cons_newline(cursor_y, sheet);
 							cursor_y = cons_newline(cursor_y, sheet);
+						}else if(strcmp(cmdline, "cls") == 0){
+							for(y = 28; y < 28 + 128; y++)
+								for(x = 8; x < 8 + 240; x++)
+									sheet->buf[x + y * sheet->bxsize] = COL8_000000;
+							sheet_refresh(sheet, 8, 28, 8 + 240, 28 + 128);
+							cursor_y = 28;
 						}else if(cmdline[0] != 0){
 							/* 既不是命令也不是空行 */
 							putStrOnSheet(sheet, 8, cursor_y, COL8_FFFFFF, "Bad command.");
