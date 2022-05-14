@@ -47,6 +47,8 @@ asmhead.bin : $(SRCPATH)asmhead.nas Makefile
 %.obj : %.nas Makefile
 	$(NASK) $*.nas $*.obj $*.lst
 
+%.hrb : $(SRCPATH)%.nas Makefile
+	$(NASK) $(SRCPATH)$*.nas $*.hrb
 
 naskfunc.obj : $(SRCPATH)naskfunc.nas Makefile
 	$(NASK) $(SRCPATH)naskfunc.nas naskfunc.obj naskfunc.lst
@@ -74,6 +76,7 @@ haribote.img : ipl10.bin haribote.sys Makefile
 		copy from:haribote.sys to:@: \
 		copy from:$(SRCPATH)ipl10.nas to:@: \
 		copy from:make.bat to:@: \
+		copy from:hlt.hrb to:@: \
 		imgout:haribote.img
 
 # 命令
