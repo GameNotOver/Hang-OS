@@ -1,0 +1,72 @@
+     1 00000000                                 [FORMAT "WCOFF"]
+     2 00000000                                 [INSTRSET "i486p"]
+     3 00000000                                 [OPTIMIZE 1]
+     4 00000000                                 [OPTION 1]
+     5 00000000                                 [BITS 32]
+     6 00000000                                 	EXTERN	_sheet_refresh
+     7 00000000                                 [FILE "command.c"]
+     8                                          [SECTION .text]
+     9 00000000                                 	GLOBAL	_cons_newline
+    10 00000000                                 _cons_newline:
+    11 00000000 55                              	PUSH	EBP
+    12 00000001 89 E5                           	MOV	EBP,ESP
+    13 00000003 57                              	PUSH	EDI
+    14 00000004 56                              	PUSH	ESI
+    15 00000005 BF 0000001C                     	MOV	EDI,28
+    16 0000000A 53                              	PUSH	EBX
+    17 0000000B 81 7D 08 0000008B               	CMP	DWORD [8+EBP],139
+    18 00000012 7F 0F                           	JG	L13
+    19 00000014 83 45 08 10                     	ADD	DWORD [8+EBP],16
+    20 00000018                                 L3:
+    21 00000018 8B 45 08                        	MOV	EAX,DWORD [8+EBP]
+    22 0000001B 8D 65 F4                        	LEA	ESP,DWORD [-12+EBP]
+    23 0000001E 5B                              	POP	EBX
+    24 0000001F 5E                              	POP	ESI
+    25 00000020 5F                              	POP	EDI
+    26 00000021 5D                              	POP	EBP
+    27 00000022 C3                              	RET
+    28 00000023                                 L13:
+    29 00000023 BE 00000008                     	MOV	ESI,8
+    30 00000028                                 L12:
+    31 00000028 8B 45 0C                        	MOV	EAX,DWORD [12+EBP]
+    32 0000002B 8B 50 04                        	MOV	EDX,DWORD [4+EAX]
+    33 0000002E 8B 18                           	MOV	EBX,DWORD [EAX]
+    34 00000030 8D 47 10                        	LEA	EAX,DWORD [16+EDI]
+    35 00000033 89 D1                           	MOV	ECX,EDX
+    36 00000035 0F AF D0                        	IMUL	EDX,EAX
+    37 00000038 0F AF CF                        	IMUL	ECX,EDI
+    38 0000003B 8D 14 32                        	LEA	EDX,DWORD [EDX+ESI*1]
+    39 0000003E 8D 0C 31                        	LEA	ECX,DWORD [ECX+ESI*1]
+    40 00000041 46                              	INC	ESI
+    41 00000042 8A 04 1A                        	MOV	AL,BYTE [EDX+EBX*1]
+    42 00000045 81 FE 000000F7                  	CMP	ESI,247
+    43 0000004B 88 04 19                        	MOV	BYTE [ECX+EBX*1],AL
+    44 0000004E 7E D8                           	JLE	L12
+    45 00000050 47                              	INC	EDI
+    46 00000051 81 FF 0000008B                  	CMP	EDI,139
+    47 00000057 7E CA                           	JLE	L13
+    48 00000059 BF 0000008C                     	MOV	EDI,140
+    49 0000005E                                 L23:
+    50 0000005E BE 00000008                     	MOV	ESI,8
+    51 00000063                                 L22:
+    52 00000063 8B 55 0C                        	MOV	EDX,DWORD [12+EBP]
+    53 00000066 89 D1                           	MOV	ECX,EDX
+    54 00000068 8B 42 04                        	MOV	EAX,DWORD [4+EDX]
+    55 0000006B 8B 12                           	MOV	EDX,DWORD [EDX]
+    56 0000006D 0F AF C7                        	IMUL	EAX,EDI
+    57 00000070 8D 04 30                        	LEA	EAX,DWORD [EAX+ESI*1]
+    58 00000073 46                              	INC	ESI
+    59 00000074 81 FE 000000F7                  	CMP	ESI,247
+    60 0000007A C6 04 10 00                     	MOV	BYTE [EAX+EDX*1],0
+    61 0000007E 7E E3                           	JLE	L22
+    62 00000080 47                              	INC	EDI
+    63 00000081 81 FF 0000009B                  	CMP	EDI,155
+    64 00000087 7E D5                           	JLE	L23
+    65 00000089 68 0000009C                     	PUSH	156
+    66 0000008E 68 000000F8                     	PUSH	248
+    67 00000093 6A 1C                           	PUSH	28
+    68 00000095 6A 08                           	PUSH	8
+    69 00000097 51                              	PUSH	ECX
+    70 00000098 E8 [00000000]                   	CALL	_sheet_refresh
+    71 0000009D 83 C4 14                        	ADD	ESP,20
+    72 000000A0 E9 FFFFFF73                     	JMP	L3

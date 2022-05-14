@@ -24,7 +24,8 @@
 #define COL8_TRSPAR		99		// TRANSPARENT
 
 
-#define ADR_BOOTINFO	0x0ff0
+#define ADR_BOOTINFO	0x00000ff0
+#define ADR_DISKIMG		0x00100000
 
 /* int.c */
 #define PIC0_ICW1		0x0020
@@ -113,11 +114,20 @@ typedef struct GATE_DESCRIPTOR {
 	short offset_high;
 } GATE_DESCRIPTOR;
 
-typedef struct BOOTINFO {
+typedef struct BOOTINFO {	/* 0x0ff0 ~ 0x0fff */
 	char cyls, leds, vmode, reserve;
 	short scrnx, scrny;
 	char *vram;
 } BOOTINFO;
+
+typedef struct  FILEINFO {
+	unsigned char name[8], ext[3];
+	unsigned char type;
+	char reverse[10];
+	unsigned short time, data;
+	unsigned short clustno;	/* 簇号 */
+	unsigned int size;
+} FILEINFO;
 
 typedef struct KEYBUF {
 	unsigned char data[32];
