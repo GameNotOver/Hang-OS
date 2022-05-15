@@ -1,3 +1,4 @@
+
 TOOLPATH = ../z_tools/
 INCPATH  = ../z_tools/haribote/
 
@@ -20,11 +21,19 @@ RESPATH  = ./resource/
 HEDPATH  = ./include/
 APPPATH	 = ./app/
 
-OBJS_BOOTPACK 	=	bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
+OBJS_BOOTPACK 	= bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
 	data.obj timer.obj multitask.obj console.obj file.obj
 
-APPS			= 	hlt.hrb
+APPS			= hlt.hrb hello.hrb hello2.hrb
+
+define \n 
+
+
+endef
+COPY_APPS		= $(foreach elem, $(APPS), copy from:$(APPPATH)$(elem) to:@: \${\n})	
+
+
 
 # 默认动作
 
@@ -85,8 +94,7 @@ haribote.img : ipl10.bin haribote.sys $(foreach elem, $(APPS), $(APPPATH)$(elem)
 		copy from:haribote.sys to:@: \
 		copy from:$(SRCPATH)ipl10.nas to:@: \
 		copy from:make.bat to:@: \
-		copy from:$(APPPATH)hlt.hrb to:@: \
-		imgout:haribote.img
+		$(COPY_APPS) imgout:haribote.img
 
 # 命令
 

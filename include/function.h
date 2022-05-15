@@ -17,6 +17,7 @@ void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
 void asm_cons_putchar(void);
+void asm_os_api(void);
 void load_gdtr(int limit, int addr);
 void load_idtr(int limit, int addr);
 int load_cr0(void);
@@ -125,8 +126,11 @@ void cmd_getpara(char *cmdline, char *cmd, char *para);
 void cmd_mem(CONSOLE *cons, unsigned int memtotal);
 void cmd_cls(CONSOLE *cons);
 void cmd_dir(CONSOLE *cons);
-void cmd_cat(CONSOLE *cons, char *fname, int *fat);
-void cmd_hlt(CONSOLE *cons, int *fat);
+void cmd_cat(CONSOLE *cons, int *fat, char *fname);
+int cmd_app(CONSOLE *cons, int *fat, char *cmdline);
+void cons_putstr(CONSOLE *cons, char *str);
+void cons_putstr_len(CONSOLE *cons, char *str, int length);
+void os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
 
 /* file.c */
 void file_readfat(int *fat, unsigned char *img);
