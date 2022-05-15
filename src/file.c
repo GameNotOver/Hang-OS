@@ -29,3 +29,39 @@ void file_loadfile(int clustno, int size, char *buf, int *fat, char *img){
     }
     return;
 }
+
+FILEINFO  *file_search(char *fname, FILEINFO *finfo, int max){
+	int x, y;
+	char fileName[12];
+    for(x = 0; x < 12; x++)
+        fileName[x] = ' ';
+    fileName[11] = 0;
+	for(x = 0, y = 0; y < 11 && fname[x] != 0; x++){
+		if(fname[x] == '.' && y <= 8){
+			y = 8;
+		}else{
+			fileName[y] = fname[x];
+			if('a' <= fileName[y] && fileName[y] <= 'z')
+				fileName[y] -= 0x20;
+			y++;
+		}
+	}
+	if(x == 11)
+		return NULL;
+	/* 寻找文件 */
+	for(x = 0; x < max; ){
+		if(finfo[x].name[0] == 0x00)
+			break;
+		if((finfo[x].type & 0x18) == 0){
+			for(y = 0; y < 11; y++){
+				if(finfo[x].name[y] != fileName[y])
+					goto type_next_file;
+			}
+			return finfo + x; /* 找到文件 */
+		}
+	type_next_file:
+		x++;
+	}
+
+	return NULL;
+}

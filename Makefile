@@ -18,10 +18,13 @@ DEL      = del
 SRCPATH  = ./src/
 RESPATH  = ./resource/
 HEDPATH  = ./include/
+APPPATH	 = ./app/
 
-OBJS_BOOTPACK =	bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
+OBJS_BOOTPACK 	=	bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
-	data.obj timer.obj multitask.obj command.obj file.obj
+	data.obj timer.obj multitask.obj console.obj file.obj
+
+APPS			= 	hlt.hrb
 
 # 默认动作
 
@@ -47,8 +50,14 @@ asmhead.bin : $(SRCPATH)asmhead.nas Makefile
 %.obj : %.nas Makefile
 	$(NASK) $*.nas $*.obj $*.lst
 
-%.hrb : $(SRCPATH)%.nas Makefile
-	$(NASK) $(SRCPATH)$*.nas $*.hrb
+
+%.hrb : $(APPPATH)%.nas Makefile
+	$(NASK) $(APPPATH)$*.nas $(APPPATH)$*.hrb
+
+
+app.bin : $(APPS) Makefile
+	$(MAKE) $(APPS)
+
 
 naskfunc.obj : $(SRCPATH)naskfunc.nas Makefile
 	$(NASK) $(SRCPATH)naskfunc.nas naskfunc.obj naskfunc.lst
@@ -70,13 +79,13 @@ bootpack.hrb : bootpack.bim Makefile
 haribote.sys : asmhead.bin bootpack.hrb Makefile
 	copy /B asmhead.bin+bootpack.hrb haribote.sys
 
-haribote.img : ipl10.bin haribote.sys Makefile
+haribote.img : ipl10.bin haribote.sys $(foreach elem, $(APPS), $(APPPATH)$(elem))  Makefile
 	$(EDIMG)   imgin:../z_tools/fdimg0at.tek \
 		wbinimg src:ipl10.bin len:512 from:0 to:0 \
 		copy from:haribote.sys to:@: \
 		copy from:$(SRCPATH)ipl10.nas to:@: \
 		copy from:make.bat to:@: \
-		copy from:hlt.hrb to:@: \
+		copy from:$(APPPATH)hlt.hrb to:@: \
 		imgout:haribote.img
 
 # 命令
@@ -85,6 +94,7 @@ img :
 	$(MAKE) haribote.img
 
 run :
+	$(MAKE) myapp
 	$(MAKE) img
 	$(COPY) haribote.img ..\z_tools\qemu\fdimage0.bin
 	$(MAKE) -C ../z_tools/qemu
@@ -93,6 +103,8 @@ install :
 	$(MAKE) img
 	$(IMGTOL) w a: haribote.img
 
+myapp	:
+	$(MAKE) $(APPS)
 	
 clean :
 	-$(DEL) *.bin

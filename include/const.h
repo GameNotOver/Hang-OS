@@ -99,6 +99,10 @@
 #define MAX_TASKS_LV	100
 #define MAX_TASKLEVELS	10
 
+/* console.c */
+#define CONS_WIDTH		256
+#define CONS_LENGTH		165
+#define CONS_TITLE_LEN	20	
 
 typedef unsigned char * BUFFER;
 
@@ -228,6 +232,11 @@ typedef struct TASKCTRL {
 	TASKLEVEL level[MAX_TASKLEVELS];
 	TASK tasks0[MAX_TASKS];
 } TASKCTRL;
+
+typedef struct CONSOLE {
+	SHEET *sheet;
+	int cur_x, cur_y, cur_c;
+} CONSOLE;
 
 
 #endif

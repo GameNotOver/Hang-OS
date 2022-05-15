@@ -15,8 +15,9 @@
 		GLOBAL	_load_cr0, _store_cr0
 		GLOBAL 	_memtest_sub
 		GLOBAL _load_tr
-		GLOBAL _farjmp
-		EXTERN	_inthandler20, _inthandler21, _inthandler27, _inthandler2c
+		GLOBAL _farjmp, _farcall
+		GLOBAL _asm_cons_putchar
+		EXTERN	_inthandler20, _inthandler21, _inthandler27, _inthandler2c, _cons_putchar
 
 [SECTION .text]
 
@@ -209,6 +210,21 @@ _load_tr:		; void load_tr(int tr);
 _farjmp:		; void farjmp(int eip, int cs);
 		JMP		FAR [ESP+4]				; eip, cs
 		RET
+_farcall:		; void farcall(int eip, int cs)
+		CALL	FAR [ESP+4]				; eip, cs
+		RET
+
+_asm_cons_putchar:
+		STI								; 对于INT指令，CPU会自动调用CLI指令，在本程序中不需要该操作，所以开中断
+		PUSH	1						; cons_putchar函数的第三个参数
+		AND		EAX, 0xff				; 将AH和EAX的高位置零， 将EAX置为已存入字符编码的状态
+		PUSH	EAX						; cons_putchar函数的第二个参数
+		PUSH	DWORD [0x0fec]			; 读取内存并push该值（cons的地址），cons_putchar函数的第一个参数
+		CALL	_cons_putchar
+		ADD		ESP, 12					; 将栈中数据丢弃
+		IRETD							; 既然用了far-CALL，那么也应该用far-RET，即RETF指令，
+										;  进一步通过INT指令调用的程序会被视作中断处理，用RETF
+										;  是无法返回的需要使用IRETD指令。
 
 
 

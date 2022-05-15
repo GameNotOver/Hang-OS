@@ -16,12 +16,14 @@ void asm_inthandler20(void);
 void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
+void asm_cons_putchar(void);
 void load_gdtr(int limit, int addr);
 void load_idtr(int limit, int addr);
 int load_cr0(void);
 void store_cr0(int cr0);
 void load_tr(int tr);
 void farjmp(int epi, int cs);
+void farcall(int epi, int cs);
 
 /* graphic.c */
 void init_palette(void);
@@ -114,11 +116,21 @@ void task_add(TASK *task);
 void task_remove(TASK *task);
 void task_switch_preset(void);
 
-/* command.c */
-int cons_newline(int cursor_y, SHEET *sheet);
+/* console.c */
+void console_task(SHEET *sheet, unsigned int memtotal);
+void cons_newline(CONSOLE *cons);
+void cons_putchar(CONSOLE *cons, char c, char x_move);
+void cons_runcmd(char *cmdline, CONSOLE *cons, int *fat, unsigned int memtotal);
+void cmd_getpara(char *cmdline, char *cmd, char *para);
+void cmd_mem(CONSOLE *cons, unsigned int memtotal);
+void cmd_cls(CONSOLE *cons);
+void cmd_dir(CONSOLE *cons);
+void cmd_cat(CONSOLE *cons, char *fname, int *fat);
+void cmd_hlt(CONSOLE *cons, int *fat);
 
 /* file.c */
 void file_readfat(int *fat, unsigned char *img);
 void file_loadfile(int clustno, int size, char *buf, int *fat, char *img);
+FILEINFO  *file_search(char *fname, FILEINFO *finfo, int max);
 
 #endif
