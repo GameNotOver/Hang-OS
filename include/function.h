@@ -12,11 +12,14 @@ int io_in8(int port);
 void io_out8(int port, int data);
 int io_load_eflags(void);
 void io_store_eflags(int eflags);
+
+void asm_inthandler0c(void);
+void asm_inthandler0d(void);
 void asm_inthandler20(void);
 void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
-void asm_inthandler0d(void);
+
 void asm_cons_putchar(void);
 void asm_os_api(void);
 void load_gdtr(int limit, int addr);
@@ -27,6 +30,7 @@ void load_tr(int tr);
 void farjmp(int epi, int cs);
 void farcall(int epi, int cs);
 void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
+void asm_end_app(void);
 
 /* graphic.c */
 void init_palette(void);
@@ -134,6 +138,7 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline);
 void cons_putstr(CONSOLE *cons, char *str);
 void cons_putstr_len(CONSOLE *cons, char *str, int length);
 int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
+int *inthandler0c(int *esp);
 int *inthandler0d(int *esp);
 
 /* file.c */

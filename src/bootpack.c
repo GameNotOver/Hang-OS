@@ -30,7 +30,7 @@ void HariMain(void)
 
 	extern char keytable0[0x80];
 	extern char keytable1[0x80];
-	int key_shift = 0;
+	int key_shift = 0, key_ctrl = 0;
 	int key_to = 0;
 	int key_leds = (binfo->leds >> 4) & 7;
 	int keycmd_wait = -1;
@@ -39,6 +39,7 @@ void HariMain(void)
 
 	SHEET *sheetCmd;
 	TASK *taskCmd;
+	CONSOLE *cons;
 
 	SHEET *mouseMove[2];
 
@@ -198,7 +199,7 @@ void HariMain(void)
 					putStrOnSheet(sheetBack, 500, 40, COL8_FFFFFF, s);
 					timer_settimer(timer_1, 1 * 100);
 					break;
-				case 256 ... 511 :	/* 键盘 */										
+				case 256 ... 511 :															/* 键盘 */										
 					sprintf(s, "%02X", (i - 256));
 					putStrOnSheet(sheetBack, 0, 16, COL8_FFFFFF, s);
 					if(i < 256 + 0x80 ){	
@@ -220,6 +221,7 @@ void HariMain(void)
 						if(key_to == 0){		/* 发送给任务a */
 							if(cursor_x < 8 * 18){
 								s[1] = 0;
+								// if(s[0] != 'c' || key_ctrl != 1)
 								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_000000, COL8_FFFFFF, s);
 								cursor_x += 8;
 							}
@@ -265,18 +267,19 @@ void HariMain(void)
 						}
 					}
 
-					if(i - 256 == 0x2a){	/* 左shift键 ON */
-						key_shift |= 1;
-					}
-					if(i - 256 == 0xaa){	/* 左shift键 OFF */
-						key_shift &= ~1;
-					}
-					if(i - 256 == 0x36){	/* 右shift键 ON */
-						key_shift |= 2;
-					}
-					if(i - 256 == 0xb6){	/* 右shift键 OFF */
-						key_shift &= ~2;
-					}
+					if(i - 256 == 0x1d)
+						key_ctrl |= 1;		/* ctrl键 ON */
+					if(i - 256 == 0x9d)
+						key_ctrl &= ~1;		/* ctrl键 OFF */
+					if(i - 256 == 0x2a)	
+						key_shift |= 1;		/* 左shift键 ON */
+					if(i - 256 == 0xaa)	
+						key_shift &= ~1;	/* 左shift键 OFF */
+					if(i - 256 == 0x36)	
+						key_shift |= 2;		/* 右shift键 ON */
+					if(i - 256 == 0xb6)	
+						key_shift &= ~2;	/* 右shift键 OFF */
+
 					/* Lock 设置 */
 					if (i == 256 + 0x3a) {	/* CapsLock */
 						key_leds ^= 4;
@@ -300,13 +303,21 @@ void HariMain(void)
 						wait_KBC_sendready();
 						io_out8(PORT_KEYDAT, keycmd_wait);
 					}
+					if (i - 256 == 0x2e && key_ctrl == 1 && taskCmd->tss.ss0 != 0){
+						cons = (CONSOLE *) *((int *) 0x0fec);
+						cons_putstr(cons, "\nCtrl^C\n");
+						io_cli();	/* 改变寄存器值之前先关中断 */
+						taskCmd->tss.eax = (int) &(taskCmd->tss.esp0);
+						taskCmd->tss.eip = (int) asm_end_app;
+						io_sti();
+					}
 
 					if(cursor_c >= 0){
 						putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
 					}
 					
 					break;
-				case 512 ... 767 :	/* 鼠标 */		
+				case 512 ... 767 :															/* 鼠标 */		
 					/* L : mdec.btn & 0x01 != 0 */
 					/* R : mdec.btn & 0x02 != 0 */
 					/* C : mdec.btn & 0x04 != 0 */

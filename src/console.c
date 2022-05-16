@@ -258,6 +258,8 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	char fname[18];
 	char para[18];
 
+	int segsiz, datsiz, esp, dathrb;
+
 	cmd_getpara(cmdline, fname, para);
 
 	finfo = file_search(fname, (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
@@ -268,24 +270,28 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 
 	if(finfo != NULL){	/* 找到文件的情况 */
 		fileBuf = (char *) memman_alloc_4k(memman, finfo->size);
-		appBuf = (char *) memman_alloc_4k(memman, 64 * 1024);
-
-		*((int *) 0xfe8) = (int) fileBuf;	/* 存储代码段的起始位置 */
 		file_loadfile(finfo->clustno, finfo->size, fileBuf, fat, img_file);
-		set_segmdesc(gdt + 1003, finfo->size - 1, (int) fileBuf, AR_CODE32_ER + 0x60);
-		set_segmdesc(gdt + 1004, 64 * 1026 - 1, (int) appBuf, AR_DATA32_RW + 0x60);
 		if(finfo->size >= 8 && strcmp_len(fileBuf + 4, "Hari", 4) == 0){
-			fileBuf[0] = 0xe8;
-			fileBuf[1] = 0x16;
-			fileBuf[2] = 0x00;
-			fileBuf[3] = 0x00;
-			fileBuf[4] = 0x00;
-			fileBuf[5] = 0xcb;
+			//JMP	0x1b		; e8 16 00 00 00 cb
+			segsiz = *((int *) (fileBuf + 0x0000));
+			esp    = *((int *) (fileBuf + 0x000c));
+			datsiz = *((int *) (fileBuf + 0x0010));
+			dathrb = *((int *) (fileBuf + 0x0014));
+			appBuf = (char *) memman_alloc_4k(memman, segsiz);
+			*((int *) 0xfe8) = (int) appBuf;	/* 存储代码段的起始位置 */
+			set_segmdesc(gdt + 1003, finfo->size - 1, (int) fileBuf, AR_CODE32_ER + 0x60);
+			set_segmdesc(gdt + 1004, segsiz - 1, (int) appBuf, AR_DATA32_RW + 0x60);
+			int i;
+			for(i = 0; i < datsiz; i++){
+				appBuf[esp+i] = fileBuf[dathrb+i];
+			}
+			start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+			memman_free(memman, (int) appBuf, segsiz);
+		}else{
+			cons_putstr(cons, ".hrb file format error!\n");
 		}
-		// farcall(0, 1003 * 8);
-		start_app(0, 1003 * 8, 64 * 1024, 1004 * 8, &(task->tss.esp0));
+		
 		memman_free(memman, (int) fileBuf, finfo->size);
-		memman_free(memman, (int) appBuf, 64 * 1024);
 		cons_newline(cons);
 		return 1;
 	}
@@ -336,9 +342,22 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 	return 0;
 }
 
+int *inthandler0c(int *esp){
+	CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
+	TASK *task = task_current();
+	char excp_addr[30];
+	cons_putstr(cons, "\nINT 0C :\nStack Exception.\n");
+	sprintf(excp_addr, "EIP = %08X\n", esp[11]);
+	cons_putstr(cons, excp_addr);
+	return &(task->tss.esp0);
+}
+
 int *inthandler0d(int *esp){
 	CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
 	TASK *task = task_current();
+	char excp_addr[30];
 	cons_putstr(cons, "\nINT 0D :\nGeneral Protected Exception.\n");
+	sprintf(excp_addr, "EIP = %08X\n", esp[11]);
+	cons_putstr(cons, excp_addr);
 	return &(task->tss.esp0);
 }
