@@ -251,6 +251,9 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	SEGMENT_DESCRIPTOR *gdt = (SEGMENT_DESCRIPTOR *) ADR_GDT;
 	char *img_file = (char *) (ADR_DISKIMG + 0x003e00);
 	char *fileBuf;
+	char *appBuf;
+
+	TASK *task = task_current();
 
 	char fname[18];
 	char para[18];
@@ -265,11 +268,24 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 
 	if(finfo != NULL){	/* 找到文件的情况 */
 		fileBuf = (char *) memman_alloc_4k(memman, finfo->size);
+		appBuf = (char *) memman_alloc_4k(memman, 64 * 1024);
+
 		*((int *) 0xfe8) = (int) fileBuf;	/* 存储代码段的起始位置 */
 		file_loadfile(finfo->clustno, finfo->size, fileBuf, fat, img_file);
-		set_segmdesc(gdt + 1003, finfo->size - 1, (int) fileBuf, AR_CODE32_ER);
-		farcall(0, 1003 * 8);
+		set_segmdesc(gdt + 1003, finfo->size - 1, (int) fileBuf, AR_CODE32_ER + 0x60);
+		set_segmdesc(gdt + 1004, 64 * 1026 - 1, (int) appBuf, AR_DATA32_RW + 0x60);
+		if(finfo->size >= 8 && strcmp_len(fileBuf + 4, "Hari", 4) == 0){
+			fileBuf[0] = 0xe8;
+			fileBuf[1] = 0x16;
+			fileBuf[2] = 0x00;
+			fileBuf[3] = 0x00;
+			fileBuf[4] = 0x00;
+			fileBuf[5] = 0xcb;
+		}
+		// farcall(0, 1003 * 8);
+		start_app(0, 1003 * 8, 64 * 1024, 1004 * 8, &(task->tss.esp0));
 		memman_free(memman, (int) fileBuf, finfo->size);
+		memman_free(memman, (int) appBuf, 64 * 1024);
 		cons_newline(cons);
 		return 1;
 	}
@@ -297,9 +313,11 @@ void cons_putstr_len(CONSOLE *cons, char *str, int length){
 	return;
 }
 
-void os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax){
+int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax){
 	CONSOLE *cons = (CONSOLE *) *((int *) 0xfec);
 	int cs_base = *((int *) 0xfe8);
+	TASK *task = task_current();
+	
 	switch(edx){
 		case 1 :
 			cons_putchar(cons, eax & 0xff, 1);
@@ -310,9 +328,17 @@ void os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 		case 3 :
 			cons_putstr_len(cons, (char *) ebx + cs_base, ecx);
 			break;
+		case 4 :
+			return &(task->tss.esp0);
 		default :
 			break;
 	}
-	return;
+	return 0;
 }
 
+int *inthandler0d(int *esp){
+	CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
+	TASK *task = task_current();
+	cons_putstr(cons, "\nINT 0D :\nGeneral Protected Exception.\n");
+	return &(task->tss.esp0);
+}

@@ -11,14 +11,15 @@
 		GLOBAL	_io_out8, _io_out16, _io_out32
 		GLOBAL	_io_load_eflags, _io_store_eflags
 		GLOBAL	_load_gdtr, _load_idtr
-		GLOBAL	_asm_inthandler20, _asm_inthandler21, _asm_inthandler27, _asm_inthandler2c
+		GLOBAL	_asm_inthandler20, _asm_inthandler21, _asm_inthandler27, _asm_inthandler2c, _asm_inthandler0d
 		GLOBAL	_load_cr0, _store_cr0
 		GLOBAL 	_memtest_sub
 		GLOBAL _load_tr
 		GLOBAL _farjmp, _farcall
 		GLOBAL _asm_cons_putchar
 		GLOBAL _asm_os_api
-		EXTERN	_inthandler20, _inthandler21, _inthandler27, _inthandler2c, _cons_putchar, _os_api
+		GLOBAL _start_app
+		EXTERN _inthandler0d, _inthandler20, _inthandler21, _inthandler27, _inthandler2c, _cons_putchar, _os_api
 
 [SECTION .text]
 
@@ -97,7 +98,46 @@ _load_idtr:		; void load_idtr(int limit, int addr);
 		LIDT	[ESP+6]
 		RET
 
-_asm_inthandler20:
+; _asm_inthandler20:
+; 		PUSH	ES
+; 		PUSH	DS
+; 		PUSHAD
+; 		MOV		AX, SS
+; 		CMP		AX, 1*8
+; 		JNE		.from_app
+; 		MOV		EAX, ESP
+; 		PUSH	EAX
+; 		MOV		AX, SS
+; 		MOV		DS, AX
+; 		MOV		ES, AX
+; 		CALL	_inthandler20
+; 		POP		EAX
+; 		POPAD
+; 		POP		DS
+; 		POP		ES
+; 		IRETD	
+; .from_app:
+; ; 当应用程序活动时发生中断
+; 		MOV		EAX, 1*8
+; 		MOV		DS, AX						; 先仅将DS设定为操作系统用
+; 		MOV		ECX, [0xfe4]				; 操作系统用ESP
+; 		ADD		ECX, -8
+; 		MOV		[ECX+4], SS
+; 		MOV		[ECX], ESP
+; 		MOV		SS, AX
+; 		MOV		ES, AX
+; 		MOV		ESP, ECX
+; 		CALL	_inthandler20
+; 		POP		ECX
+; 		POP		EAX
+; 		MOV		SS, AX						; 将SS设回应用程序用
+; 		MOV		ESP, ECX					; 将ESP设回应用程序用
+; 		POPAD
+; 		POP		DS
+; 		POP		ES
+; 		IRETD
+
+ _asm_inthandler20:
 		PUSH	ES
 		PUSH	DS
 		PUSHAD
@@ -111,7 +151,8 @@ _asm_inthandler20:
 		POPAD
 		POP		DS
 		POP		ES
-		IRETD	
+		IRETD
+
 
 _asm_inthandler21:
 		PUSH	ES
@@ -160,6 +201,86 @@ _asm_inthandler2c:
 		POP		DS
 		POP		ES
 		IRETD
+
+; _asm_inthandler0d:
+; 		STI
+; 		PUSH	ES
+; 		PUSH	DS
+; 		PUSHAD
+; 		MOV		AX, SS
+; 		CMP		AX, 1*8
+; 		JNE		.from_app
+; ; 当操作系统活动是产生中断
+; 		MOV		EAX, ESP
+; 		PUSH	SS							; 保存中断时的SS
+; 		PUSH	EAX							; 保存中断时的ESP
+; 		MOV		AX, SS
+; 		MOV		DS, AX
+; 		MOV		ES, AX
+; 		CALL	_inthandler0d
+; 		ADD		ESP, 8
+; 		POPAD
+; 		POP		DS
+; 		POP		ES
+; 		ADD		ESP, 4						; 在int 0x0d中需要这句
+; 		IRETD	
+; .from_app:
+; ; 当应用程序活动时发生中断
+; 		MOV		EAX, 1*8
+; 		MOV		DS, AX						; 先仅将DS设定为操作系统用
+; 		MOV		ECX, [0xfe4]				; 操作系统用ESP
+; 		ADD		ECX, -8
+; 		MOV		[ECX+4], SS
+; 		MOV		[ECX], ESP
+; 		MOV		SS, AX
+; 		MOV		ES, AX
+; 		MOV		ESP, ECX
+; 		STI
+; 		CALL	_inthandler0d
+; 		CLI
+; 		CMP		EAX, 0
+; 		JNZ		.kill
+; 		POP		ECX
+; 		POP		EAX
+; 		MOV		SS, AX						; 将SS设回应用程序用
+; 		MOV		ESP, ECX					; 将ESP设回应用程序用
+; 		POPAD
+; 		POP		DS
+; 		POP		ES
+; 		ADD		ESP, 4						; 在int 0x0d中需要这句
+; 		IRETD
+; .kill:
+; ; 将应用程序强制结束
+; 		MOV		EAX, 1*8
+; 		MOV		ES, AX
+; 		MOV		SS, AX
+; 		MOV		DS, AX
+; 		MOV		FS, AX
+; 		MOV		GS, AX
+; 		MOV		ESP, [0xfe4]				; 强制返回到start_app时的ESP
+; 		STI									; 切换完成后恢复中断请求
+; 		POPAD								; 恢复事先保存的寄存器的值
+; 		RET
+_asm_inthandler0d:
+		STI
+		PUSH	ES
+		PUSH	DS
+		PUSHAD
+		MOV		EAX,ESP
+		PUSH	EAX
+		MOV		AX,SS
+		MOV		DS,AX
+		MOV		ES,AX
+		CALL	_inthandler0d
+		CMP		EAX, 0
+		JNE		end_app
+		POP		EAX
+		POPAD
+		POP		DS
+		POP		ES
+		ADD		ESP, 4						; 在INT 0x0d中需要这句
+		IRETD
+
 
 _load_cr0:		; int load_cr0(void);
 		MOV		EAX,CR0
@@ -228,14 +349,125 @@ _asm_cons_putchar:
 		IRETD							; 既然用了far-CALL，那么也应该用far-RET，即RETF指令，
 										;  进一步通过INT指令调用的程序会被视作中断处理，用RETF
 										;  是无法返回的需要使用IRETD指令。
+; _asm_os_api:
+; 		; 为了方便起见，开头就禁止中断
+; 		PUSH	DS						
+; 		PUSH	ES						
+; 		PUSHAD							;  顺序：EAX->ECX->EDX->EBX->ESP->EBP->ESI->EDI
+; 		MOV		EAX, 1*8
+; 		MOV		DS, AX					; 先仅将DS设定为操作系统用
+; 		MOV		ECX, [0xfe4]			; 操作系统的ESP
+; 		ADD		ECX, -40
+; 		MOV 	[ECX+32], ESP			; 保存应用程序的ESP
+; 		MOV		[ECX+36], SS			; 保存应用程序的SS
+
+; ; 将PUSHAD后的值复制到系统栈
+
+; 		MOV		EDX, [ESP]				; 复制传递给os_api
+; 		MOV		EBX, [ESP+4]			; 复制传递给os_api
+; 		MOV 	[ECX], EDX
+; 		MOV		[ECX+4], EBX
+
+; 		MOV		EDX, [ESP+8]			; 复制传递给os_api
+; 		MOV		EBX, [ESP+12]			; 复制传递给os_api
+; 		MOV 	[ECX+8], EDX
+; 		MOV		[ECX+12], EBX
+
+; 		MOV		EDX, [ESP+16]			; 复制传递给os_api
+; 		MOV 	EBX, [ESP+20]			; 复制传递给os_api
+; 		MOV 	[ECX+16], EDX
+; 		MOV		[ECX+20], EBX
+
+; 		MOV		EDX, [ESP+24]			; 复制传递给os_api
+; 		MOV 	EBX, [ESP+28]			; 复制传递给os_api
+; 		MOV 	[ECX+24], EDX
+; 		MOV		[ECX+28], EBX
+
+; 		MOV		ES, AX					; 将剩余的段寄存器也设为操作系统使用
+; 		MOV		SS, AX
+; 		MOV		ESP, ECX
+; 		STI								; 开中断
+
+; 		CALL	_os_api					; 传入os_api中的8个参数存于ECX+Offset
+
+; 		MOV		ECX, [ESP+32]			; 取出应用程序的ESP
+; 		MOV		EAX, [ESP+36]			; 取出应用程序的SS
+; 		CLI								; 关中断
+; 		MOV		SS, AX
+; 		MOV		ESP, ECX	
+; 		POPAD
+; 		POP		ES
+; 		POP		DS
+; 		IRETD							; 这个程序会自动执行STI
+
 _asm_os_api:
 		STI
-		PUSHAD							; 用于保存寄存器的值
-		PUSHAD							; 用于向os_api传值的PUSH
-										;  顺序：EAX->ECX->EDX->EBX->ESP->EBP->ESI->EDI
-		CALL	_os_api					; 传入os_api中分别是第 8 ~ 1 个参数
+		PUSH	DS
+		PUSH	ES
+		PUSHAD							; 用于保存的PUSH
+		PUSHAD							; 用于向os_api传值的push
+		MOV		AX, SS
+		MOV		DS, AX					; 将操作系统用段地址存入DS和ES
+		MOV		ES, AX					
+		CALL 	_os_api
+		CMP		EAX, 0					; 当EAX不为0时程序结束
+		JNE		end_app
 		ADD		ESP, 32
 		POPAD
+		POP		ES
+		POP		DS
 		IRETD
+end_app:
+; EAX为tss.esp0的地址
+		MOV		ESP, [EAX]
+		POPAD
+		RET								; 返回cmd_app
+
+
+_start_app:		; void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
+		PUSHAD							; 将32位寄存器全部保护起来
+		MOV		EAX, [ESP+36]			; 应用程序用EIP
+		MOV		ECX, [ESP+40]			; 应用程序用CS
+		MOV		EDX, [ESP+44]			; 应用程序用ESP
+		MOV		EBX, [ESP+48]			; 应用程序用DS/SS
+		MOV		EBP, [ESP+52]			; tss.esp0的地址
+		MOV		[EBP], ESP				; 保存操作系统用ESP
+		MOV		[EBP+4], SS				; 保存操作系统用SS
+		; CLI								; 切换过程中关中断
+		MOV		ES, BX
+		; MOV		SS, BX
+		MOV		DS, BX
+		MOV		FS, BX
+		MOV		GS, BX
+		; MOV		ESP, EDX
+; 下面调整栈，以免用RETF跳转到应用程序
+		OR		ECX, 3					; 将应用程序用段号和3进行OR运算
+		OR		EBX, 3					; 将应用程序用段号和3进行OR运算
+		PUSH	EBX						; 应用程序的SS
+		PUSH	EDX						; 应用程序的ESP
+		PUSH	ECX						; 应用程序的CS
+		PUSH	EAX						; 应用程序的EIP
+		RETF
+;应用程序结束后不会回到这里
+
+; 		STI								; 切换完成开中断
+; 		PUSH	ECX						; 用于far-CALL的PUSH(cs)
+; 		PUSH	EAX						; 用于far-CALL的PUSH(eip)
+; 		CALL	FAR [ESP]				; 调用应用程序
+
+; ; 应用程序结束后返回此处
+
+; 		MOV		EAX, 1*8				; 操作系统用DS/SS	
+; 		CLI								; 再次进行切换，关中断
+; 		MOV		ES, AX
+; 		MOV		SS, AX
+; 		MOV		DS, AX
+; 		MOV		FS, AX
+; 		MOV		GS, AX
+; 		MOV		ESP, [0xfe4]
+; 		STI								; 切换完成，开中断
+; 		POPAD							; 恢复之前保存的寄存器的值
+; 		RET
+
 
 

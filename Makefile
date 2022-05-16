@@ -25,7 +25,7 @@ OBJS_BOOTPACK 	= bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
 	data.obj timer.obj multitask.obj console.obj file.obj
 
-APPS			= hlt.hrb hello.hrb hello2.hrb
+APPS			= hlt.hrb hello.hrb hello2.hrb hello3.hrb crack.hrb crack2.hrb
 
 define \n 
 
@@ -59,15 +59,29 @@ asmhead.bin : $(SRCPATH)asmhead.nas Makefile
 %.obj : %.nas Makefile
 	$(NASK) $*.nas $*.obj $*.lst
 
-
+# nas -> hrb
 %.hrb : $(APPPATH)%.nas Makefile
 	$(NASK) $(APPPATH)$*.nas $(APPPATH)$*.hrb
+	
 
+# c -> hrb
+%.gas : $(APPPATH)%.c Makefile
+	$(CC1) -o $*.gas $(APPPATH)$*.c
+%.nas : %.gas $(APPPATH)%.c Makefile
+	$(GAS2NASK) $*.gas $*.nas
+%.obj : $(APPPATH)%.nas $(APPPATH)%.c Makefile
+	$(NASK) $(APPPATH)$*.nas $*.obj $*.lst
 
-app.bin : $(APPS) Makefile
-	$(MAKE) $(APPS)
+%.bim: %.obj $(APPPATH)%.c $(APPPATH)a_nask.obj Makefile
+	$(OBJ2BIM) @$(RULEFILE) out:$*.bim map:$*.map $*.obj $(APPPATH)a_nask.obj
 
+%.hrb: %.bim $(APPPATH)%.c Makefile
+	$(BIM2HRB) $*.bim $(APPPATH)$*.hrb 0
 
+hello3.map: hello3.obj $(APPPATH)hello3.c $(APPPATH)a_nask.obj Makefile
+	$(OBJ2BIM) @$(RULEFILE) out:hello3.bim map:hello3.map hello3.obj $(APPPATH)a_nask.obj
+
+# os app
 naskfunc.obj : $(SRCPATH)naskfunc.nas Makefile
 	$(NASK) $(SRCPATH)naskfunc.nas naskfunc.obj naskfunc.lst
 
@@ -122,6 +136,15 @@ clean :
 	-$(DEL) bootpack.bim
 	-$(DEL) bootpack.hrb
 	-$(DEL) haribote.sys
+	-$(DEL) *.map
+	-$(DEL) *.nas
+	-$(DEL) *.bim
+	-$(DEL) *.gas
+	$(MAKE) -C $(APPPATH) clean
+
+appclean:
+	-$(DEL) $(APPPATH)a_nask.lst
+	-$(DEL) $(APPPATH)a_nask.lst
 
 src_only :
 	$(MAKE) clean
