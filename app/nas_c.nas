@@ -23,4 +23,4 @@ fin:
 
 [SECTION .data]
 msg:
-        DB      "hello,yuhangwu",0xa, 0              ; 前面字符的ascii码加上0作结尾标志
+        DB      "nas file put str by char",0xa, 0              ; 前面字符的ascii码加上0作结尾标志

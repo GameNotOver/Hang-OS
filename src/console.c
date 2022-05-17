@@ -261,6 +261,7 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	int segsiz, datsiz, esp, dathrb;
 
 	cmd_getpara(cmdline, fname, para);
+	// putStrOnSheet(cons->sheet, 0, 0, COL8_FFFFFF, fname);
 
 	finfo = file_search(fname, (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
 	if(finfo == 0 && fname[strlen(fname) - 1] != 0){
@@ -320,22 +321,75 @@ void cons_putstr_len(CONSOLE *cons, char *str, int length){
 }
 
 int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax){
-	CONSOLE *cons = (CONSOLE *) *((int *) 0xfec);
-	int cs_base = *((int *) 0xfe8);
+	int ds_base = *((int *) 0xfe8);
 	TASK *task = task_current();
+	CONSOLE *cons = (CONSOLE *) *((int *) 0xfec);
+	SHEETCTRL *sheetCtrl = (SHEETCTRL *) *((int *) 0x0fe4);
+	SHEET *sheet;
+	MEMMAN *memman = (MEMMAN *) (ebx + ds_base);
+	// SHEET *sb = (SHEET *) *((int *) 0x0fc4);
+	int *reg = &eax + 1;	/* eax后面的地址 */
+		/* 强行改写通过PUSHAD保存的值 */
+		/* reg[0] : EDI,   reg[1] : ESI,   reg[2] : EBP,   reg[3] : ESP */
+		/* reg[4] : EBX,   reg[5] : EDX,   reg[6] : ECX,   reg[7] : EAX */
+
+	int len;
 	
 	switch(edx){
-		case 1 :
+		case 1:
 			cons_putchar(cons, eax & 0xff, 1);
 			break;
-		case 2 :
-			cons_putstr(cons, (char *) ebx + cs_base);
+		case 2:
+			cons_putstr(cons, (char *) ebx + ds_base);
 			break;
-		case 3 :
-			cons_putstr_len(cons, (char *) ebx + cs_base, ecx);
+		case 3:
+			cons_putstr_len(cons, (char *) ebx + ds_base, ecx);
 			break;
-		case 4 :
+		case 4:
 			return &(task->tss.esp0);
+		case 5:
+			sheet = sheet_alloc(sheetCtrl);
+			// make_window8_buf(sheet, (char *) ebx + ds_base, esi, edi, (char *) ecx + ds_base, 0);
+			make_window8(sheet, esi, edi, (char *) ecx + ds_base, 0);
+			sheet_slide(sheet, 400, 300);
+			sheet_updown(sheet, 3);
+			reg[7] = (int) sheet;
+			break;
+		case 6:
+			sheet = (SHEET *) ebx;
+			putStrOnSheet(sheet, esi, edi, eax, (char *) ebp + ds_base);
+			len = strlen((char *) ebp + ds_base);
+			sheet_refresh(sheet, esi, edi, esi + len * 8, edi + 16);
+			break;
+		case 7:
+			sheet = (SHEET *) ebx;
+			len = strlen((char *) ebp + ds_base);
+			boxfill8(sheet->buf, sheet->bxsize, ebp, eax, ecx, esi, edi);
+			sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
+			break;
+		case 8:
+			memman_init(memman);
+			ecx &= 0xfffffff0;	/* 以16字节为单位 */
+			memman_free(memman, eax, ecx);
+			break;
+		case 9:
+			ecx = (ecx + 0x0f) & 0xfffffff0;	/* 以16字节为单位进位取整 */
+			reg[7] = memman_alloc(memman, ecx);
+			break;
+		case 10:
+			ecx = (ecx + 0x0f) & 0xfffffff0;
+			memman_free(memman, eax, ecx);
+			break;
+		case 11:
+			sheet = (SHEET *) (ebx & 0xfffffffe);
+			sheet->buf[sheet->bxsize * edi + esi] = eax;
+			if(ebx & 1 == 0)
+				sheet_refresh(sheet, esi, edi, esi + 1, edi + 1);
+			break;
+		case 12:
+			sheet = (SHEET *) ebx;
+			sheet_refresh(sheet, eax, ecx, esi, edi);
+			break;
 		default :
 			break;
 	}

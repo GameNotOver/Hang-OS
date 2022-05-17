@@ -75,11 +75,15 @@ void HariMain(void)
 	/* sheet控制器初始化 */
 	sheetCtrl = sheetctrl_init(memman, binfo->vram, binfo->scrnx, binfo->scrny);
 
+	*((int *) 0x0fe4) = (int) sheetCtrl;
+
 	/* 背景sheet */
 	sheetBack = sheet_alloc(sheetCtrl);
 	bufBack = (unsigned char *) memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
 	sheet_setbuf(sheetBack, bufBack, binfo->scrnx, binfo->scrny, -1); /* 没有透明色 */
 	init_screen8(bufBack, binfo->scrnx, binfo->scrny);
+
+	// *((int *) 0x0fc4) = (int) sheetBack;
 
 	/* 鼠标sheet */
 	sheetMouse = sheet_alloc(sheetCtrl);
@@ -139,34 +143,41 @@ void HariMain(void)
 	sheet_slide(sheetWinNotepad, 80 + 160 + 5, 72 + 68 + 5);
 	sheet_slide(sheetWin, 108, 56);
 	sheet_slide(sheetCmd, 70, 200);
-	sheet_slide(sheet_win_b[0], 268, 56);
-	sheet_slide(sheet_win_b[1], 108, 116);
-	sheet_slide(sheet_win_b[2], 268, 116);
+	// sheet_slide(sheet_win_b[0], 268, 56);
+	// sheet_slide(sheet_win_b[1], 108, 116);
+	// sheet_slide(sheet_win_b[2], 268, 116);
 
 	mx = binfo->scrnx / 2;
 	my = binfo->scrny / 2;
 	sheet_slide(sheetMouse, mx, my);
 
 	sheet_updown(sheetBack, 0);
-	sheet_updown(sheet_win_b[0], 1);
-	sheet_updown(sheet_win_b[1], 2);
-	sheet_updown(sheet_win_b[2], 3);
-	sheet_updown(sheetWin, 4);
-	sheet_updown(sheetCmd, 5);
-	sheet_updown(sheetWinNotepad, 6);
-	sheet_updown(sheetMouse, 7);
+	// sheet_updown(sheet_win_b[0], 1);
+	// sheet_updown(sheet_win_b[1], 2);
+	// sheet_updown(sheet_win_b[2], 3);
+	sheet_updown(sheetWin, 1);
+	sheet_updown(sheetCmd, 2);
+	sheet_updown(sheetWinNotepad, 3);
+	sheet_updown(sheetMouse, 4);
 
 	int count = 0;
 	int second_counter = 0;
 
+	SHEET *curTopSheet;
 	mouseMove[0] = sheetWinNotepad;
 	mouseMove[1] = sheetCmd;
 	int curMove = 0;
+	curTopSheet = mouseMove[curMove];
 
+	int bgColor;
+	int x, y;
 	for (;;) {
 		count++;
+
 		sprintf(s, "%010d", count);
-		putStrOnSheet(sheetWin, 40, 28, COL8_000000, s);
+		x = 40; y = 28;
+		bgColor = sheetWin->buf[y * sheetWin->bxsize + x];
+		putStrOnSheet_BG(sheetWin, x, y, COL8_000000, bgColor, s);
 
 		if(fifo32_status(&keyCmdFifo) > 0 && keycmd_wait < 0){
 			keycmd_wait = fifo32_get(&keyCmdFifo);
@@ -195,13 +206,21 @@ void HariMain(void)
 					break;
 				case 1:
 					second_counter++;
-					sprintf(s, "%d SEC", second_counter);
-					putStrOnSheet(sheetBack, 500, 40, COL8_FFFFFF, s);
+					sprintf(s, "COUNT: %d SEC", second_counter);
+
+					x = 500; y = 40;
+					bgColor = sheetBack->buf[y * sheetBack->bxsize + x];
+					putStrOnSheet_BG(sheetBack, x, y, COL8_FFFFFF, bgColor, s);
+
 					timer_settimer(timer_1, 1 * 100);
 					break;
 				case 256 ... 511 :															/* 键盘 */										
 					sprintf(s, "%02X", (i - 256));
-					putStrOnSheet(sheetBack, 0, 16, COL8_FFFFFF, s);
+
+					x = 0; y = 16;
+					bgColor = sheetBack->buf[y * sheetBack->bxsize + x];
+					putStrOnSheet_BG(sheetBack, x, y, COL8_FFFFFF, bgColor, s);
+
 					if(i < 256 + 0x80 ){	
 						if(key_shift == 0){
 							s[0] = keytable0[i - 256];
@@ -331,12 +350,22 @@ void HariMain(void)
 						my = min(my, binfo->scrny);
 						sprintf(s, "(%3d, %3d)", mx, my);
 
-						putStrOnSheet(sheetBack, 0, 0, COL8_000000, s);
+						x = 0; y = 0;
+						bgColor = sheetBack->buf[y * sheetBack->bxsize + x];
+						putStrOnSheet_BG(sheetBack, x, y, COL8_000000, bgColor, s);
 
 						sheet_slide(sheetMouse, mx, my);
 
 						if((mdec.btn & 0x01) != 0){	/* 按下左键 */
-							sheet_slide(mouseMove[curMove], mx - 80, my -8);
+							sprintf(s, "top: %d", sheetCtrl->top);
+							putStrOnSheet_BG(sheetBack, 100, 120, COL8_000000, COL8_FFFFFF, s);
+							if(curTopSheet != mouseMove[curMove]){
+								curTopSheet = mouseMove[curMove];
+								sheet_updown(curTopSheet, sheetCtrl->top - 1);
+							}
+
+							sheet_slide(curTopSheet, mx - 80, my -8);
+							// sheet_updown(mouseMove[curMove], sheetCtrl->top - 1);
 						}
 					}
 					break;

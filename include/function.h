@@ -48,6 +48,7 @@ void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, 
 void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act);
 void set_win_title_bar(SHEET *sheet, char *title, char act);
 void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c);
+void make_window8_buf(SHEET *sheet, char* buf, int xsize, int ysize, char *title, char act);
 
 /* dsctbl.c */
 void init_gdtidt(void);
@@ -83,8 +84,11 @@ unsigned int memtest(unsigned int start, unsigned int end);
 unsigned int memtest_sub(unsigned int start, unsigned int end);
 void memman_init(MEMMAN *man);
 unsigned int memman_total(MEMMAN *man);
+
+unsigned int memman_alloc(MEMMAN *man, unsigned int size);
 int memman_free(MEMMAN *man, unsigned int addr, unsigned int size);
 unsigned int memman_alloc_4k(MEMMAN *man, unsigned int size);
+int memman_free_4k(MEMMAN *man, unsigned int addr, unsigned int size);
 
 /* math.c */
 int max(int a, int b);

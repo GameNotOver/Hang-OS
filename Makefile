@@ -28,8 +28,8 @@ OBJS_BOOTPACK = bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
 	data.obj timer.obj multitask.obj console.obj file.obj
 
-APPS = hlt.hrb hello.hrb hello3.hrb hello4.hrb hello5.hrb \
-	crack.hrb bug.hrb bug2.hrb
+APPS = nas_loop.hrb nas_c.hrb nas_s.hrb c_c.hrb c_s.hrb \
+	crack.hrb bug.hrb bug2.hrb opwin.hrb
 
 COPY_APPS		= $(foreach elem, $(APPS), copy from:$(APPPATH)$(elem) to:@: \${\n})	
 
@@ -73,10 +73,10 @@ asmhead.bin : $(SRCPATH)asmhead.nas Makefile
 	$(NASK) $(APPPATH)$*.nas $*.obj $*.lst
 
 %.bim: %.obj $(APPPATH)%.c $(APPPATH)a_nask.obj Makefile
-	$(OBJ2BIM) @$(RULEFILE) out:$*.bim map:$*.map $*.obj $(APPPATH)a_nask.obj
+	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj $(APPPATH)a_nask.obj
 
 %.bim: %.obj Makefile
-	$(OBJ2BIM) @$(RULEFILE) out:$*.bim map:$*.map $*.obj
+	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj
 
 %.hrb: %.bim  Makefile
 	$(BIM2HRB) $*.bim $(APPPATH)$*.hrb 0

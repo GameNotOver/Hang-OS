@@ -143,6 +143,23 @@ void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act){
 	set_win_title_bar(sheet, title, act);
 }
 
+void make_window8_buf(SHEET *sheet, char* buf, int xsize, int ysize, char *title, char act){
+
+	sheet_setbuf(sheet, buf, xsize, ysize, -1);
+
+	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         xsize - 1, 0        );
+	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         xsize - 2, 1        );
+	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         0,         ysize - 1);
+	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         1,         ysize - 2);
+	boxfill8(buf, xsize, COL8_848484, xsize - 2, 1,         xsize - 2, ysize - 2);
+	boxfill8(buf, xsize, COL8_000000, xsize - 1, 0,         xsize - 1, ysize - 1);
+	boxfill8(buf, xsize, COL8_C6C6C6, 2,         2,         xsize - 3, ysize - 3);
+	boxfill8(buf, xsize, COL8_848484, 1,         ysize - 2, xsize - 2, ysize - 2);
+	boxfill8(buf, xsize, COL8_000000, 0,         ysize - 1, xsize - 1, ysize - 1);
+
+	set_win_title_bar(sheet, title, act);
+}
+
 void set_win_title_bar(SHEET *sheet, char *title, char act){
 	int x, y;
 	char c, title_color, title_bar_color;
@@ -197,8 +214,6 @@ void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c)
 
 void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str){
 	int strLen = stringlength(str);
-	int bgColor = sheet->buf[y * sheet->bxsize + x];
-	boxfill8(sheet->buf, sheet->bxsize, bgColor, x, y, x + strLen * 8 - 1, y + 16 - 1);
 	putfonts8_asc(sheet->buf, sheet->bxsize, x, y, font_color, str);
 	sheet_refresh(sheet, x, y, x + strLen * 8, y + 16);
 }

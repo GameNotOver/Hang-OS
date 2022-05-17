@@ -17,4 +17,4 @@ _HariMain:
 [SECTION .data]
 
 msg:
-        DB      "this is file 5", 0x0a, 0
+        DB      "nas file put str by str", 0x0a, 0

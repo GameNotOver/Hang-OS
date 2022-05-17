@@ -121,7 +121,7 @@ int memman_free(MEMMAN *man, unsigned int addr, unsigned int size){
 	/* 不能往后移动 */
 	man->losts++;
 	man->lostsize += size;
-	return -1;	/* s失败 */
+	return -1;	/* 失败 */
 }
 
 unsigned int memman_alloc_4k(MEMMAN *man, unsigned int size){
@@ -129,4 +129,11 @@ unsigned int memman_alloc_4k(MEMMAN *man, unsigned int size){
     size = (size + 0xfff) & 0xfffff000;     /* 以4KB为单位，将size向上舍入 */
     addr = memman_alloc(man, size);
     return addr;
+}
+
+int memman_free_4k(MEMMAN *man, unsigned int addr, unsigned int size){
+	int status;
+    size = (size + 0xfff) & 0xfffff000;     /* 以4KB为单位，将size向上舍入 */
+    status = memman_free(man, addr, size);
+    return status;
 }

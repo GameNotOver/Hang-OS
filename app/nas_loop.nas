@@ -4,7 +4,6 @@
         GLOBAL _HariMain
 [SECTION .text]
         ; CLI 
-_HariMain: 
+_HariMain:
 fin:
-        HLT
         JMP     fin

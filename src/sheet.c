@@ -93,7 +93,7 @@ void sheet_updown(SHEET *sheet, int height){
             ctrl->sheets[height] = sheet;
         }else{  /* 由隐藏状态转为显示状态 */
             /* 将height以上的往上提 */
-            for(i = ctrl->top; i > height; i--){
+            for(i = ctrl->top; i >= height; i--){
                 ctrl->sheets[i+1] = ctrl->sheets[i];
                 ctrl->sheets[i+1]->height = i + 1;
             }
