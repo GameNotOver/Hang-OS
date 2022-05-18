@@ -90,6 +90,9 @@
 #define TIMER_FLAGS_ALLOC	1
 #define TIMER_FLAGS_USING	2
 
+#define TIMER_FLAGS_BASIC	0
+#define TIMER_FLAGS_APP		1
+
 /* multitask.c */
 #define MAX_TASKS		1000
 #define TASK_GDT0		3
@@ -176,6 +179,7 @@ typedef struct SHEET {
 	int height;			/* 图层深度 */
 	int flags;			/* 图层设定信息 */
 	struct SHEETCTRL *ctrl;	/* sheet controller*/
+	struct TASK *task;
 } SHEET;
 
 typedef struct SHEETCTRL {
@@ -190,8 +194,9 @@ typedef struct SHEETCTRL {
 typedef struct TIMER {
 	unsigned int timeout;
 	unsigned int flags;
+	unsigned int flags_basic;
 	FIFO32 *fifo;
-	unsigned char data;
+	int data;
 	struct TIMER *next;
 } TIMER;
 
@@ -236,6 +241,7 @@ typedef struct TASKCTRL {
 typedef struct CONSOLE {
 	SHEET *sheet;
 	int cur_x, cur_y, cur_c;
+	TIMER *timer;
 } CONSOLE;
 
 

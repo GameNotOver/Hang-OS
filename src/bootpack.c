@@ -18,11 +18,12 @@ void HariMain(void)
 	FIFO32 fifo32, keyCmdFifo;
 	int fifo32buf[128], keyCmdBuf[32];
 
-	MOUSE_DEC mdec;
+	MOUSE_DEC mdec; 
 
 	unsigned int memtotal;
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	SHEETCTRL *sheetCtrl;
+	SHEET *keyWin;		/* 接收键盘值的sheet */
 	SHEET *sheetBack, *sheetMouse, *sheetWin, *sheet_win_b[3];
 	unsigned char *bufBack, bufMouse[256];
 
@@ -83,7 +84,7 @@ void HariMain(void)
 	sheet_setbuf(sheetBack, bufBack, binfo->scrnx, binfo->scrny, -1); /* 没有透明色 */
 	init_screen8(bufBack, binfo->scrnx, binfo->scrny);
 
-	// *((int *) 0x0fc4) = (int) sheetBack;
+	*((int *) 0x0fc4) = (int) sheetBack;
 
 	/* 鼠标sheet */
 	sheetMouse = sheet_alloc(sheetCtrl);
@@ -116,7 +117,7 @@ void HariMain(void)
 
 	/* Notepad sheet */
 	SHEET *sheetWinNotepad = sheet_alloc(sheetCtrl);
-	make_window8(sheetWinNotepad, 160, 20 + 30, "NotePad", 1);
+	make_window8(sheetWinNotepad, 160, 20 + 30, "Notepad", 1);
 	make_textbox8(sheetWinNotepad, 8, 28, 144, 16, COL8_FFFFFF);
 
 	task_a = task_init(memman);
@@ -140,7 +141,7 @@ void HariMain(void)
 	task_run(taskCmd, 2, 2);	
 
 	sheet_slide(sheetBack, 0, 0);
-	sheet_slide(sheetWinNotepad, 80 + 160 + 5, 72 + 68 + 5);
+	sheet_slide(sheetWinNotepad, 220, 260);
 	sheet_slide(sheetWin, 108, 56);
 	sheet_slide(sheetCmd, 70, 200);
 	// sheet_slide(sheet_win_b[0], 268, 56);
@@ -166,11 +167,21 @@ void HariMain(void)
 	SHEET *curTopSheet;
 	mouseMove[0] = sheetWinNotepad;
 	mouseMove[1] = sheetCmd;
-	int curMove = 0;
+	int curMove = 1;
 	curTopSheet = mouseMove[curMove];
 
 	int bgColor;
 	int x, y;
+
+	int mInShtX, mInShtY;
+	int mmx = -1, mmy = -1;
+	SHEET *tempSheet = 0;
+	int j;
+	
+	keyWin = sheetWinNotepad;
+	sheetCmd->task = taskCmd;
+	sheetCmd->flags |= 0x20;	/* 有光标 */
+
 	for (;;) {
 		count++;
 
@@ -193,8 +204,12 @@ void HariMain(void)
 		}else{
 			i = fifo32_get(&fifo32);
 			io_sti();
+			if(keyWin->flags == 0){	/* 输入窗口被关闭 */
+				keyWin = sheetCtrl->sheets[sheetCtrl->top - 1];
+				keyWinOn(keyWin, sheetWinNotepad, &cursor_c);
+			}
 			switch (i){
-				case 0 : case 0xff :
+				case 0 : case 0xffffffff :
 					timer_init(timer_cursor, &fifo32, ~i);
 					timer_settimer(timer_cursor, 50);
 
@@ -236,53 +251,39 @@ void HariMain(void)
 							   s[0] += 0x20;	/* 将大写字母转换为小写 */
 						   }
 					}
-					if(s[0] != 0){		/* 一般字符 */
-						if(key_to == 0){		/* 发送给任务a */
+					if(s[0] != 0 && key_ctrl != 1){		/* 一般字符 */
+						if(keyWin == sheetWinNotepad){		/* 发送给任务a */
 							if(cursor_x < 8 * 18){
 								s[1] = 0;
 								// if(s[0] != 'c' || key_ctrl != 1)
 								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_000000, COL8_FFFFFF, s);
 								cursor_x += 8;
 							}
-						}else{
+						}else{	/* 发送至命令行窗口 */
 							/* 为了不与键盘数据冲突， 在写入fifo时将键盘数值加256 */ 
-							fifo32_put(&taskCmd->fifo, s[0] + 256);
+							fifo32_put(&keyWin->task->fifo, s[0] + 256);
 						}
 					}
 					if(i - 256 == 0x0e)	{	/* 退格键 */
-						if(key_to == 0){	/* 发送给任务a */
+						if(keyWin == sheetWinNotepad){	/* 发送给任务a */
 							if(cursor_x > 8){
 								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_FFFFFF, COL8_FFFFFF, " ");
 								cursor_x -= 8;
 							}
-						}else{
-							fifo32_put(&taskCmd->fifo, 8 + 256);
+						}else{	/* 发送至命令行窗口 */
+							fifo32_put(&keyWin->task->fifo, 8 + 256);
 						}
 						
 					}
 					if(i - 256 == 0x0f){	/* Tab键 */
-						curMove = curMove == 0 ? 1 : 0;
-						// sheet_updown(mouseMove[curMove], 6);
-						if(key_to == 0){
-							key_to = 1;
-							set_win_title_bar(sheetWinNotepad, "NotePad", 0);
-							set_win_title_bar(sheetCmd, "Console", 1);
-							cursor_c = -1;	/* Notepad不显示光标 */
-							putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, COL8_FFFFFF);
-							fifo32_put(&taskCmd->fifo, 2);	/* 命令行窗口显示光标 */
-						}else{
-							key_to = 0;
-							set_win_title_bar(sheetWinNotepad, "NotePad", 1);
-							set_win_title_bar(sheetCmd, "Console", 0);
-							cursor_c = COL8_000000;	/* Notepad显示光标 */
-							fifo32_put(&taskCmd->fifo, 3);	/* 命令行窗口不显示光标 */
-						}
-						sheet_refresh(sheetWinNotepad, 0, 0, sheetWinNotepad->bxsize, 21);
-						sheet_refresh(sheetCmd, 0, 0, sheetCmd->bxsize, 21);
+						keyWinOff(keyWin, sheetWinNotepad, &cursor_c, cursor_x);
+						keyWin = sheetCtrl->sheets[1];
+						sheet_updown(keyWin, sheetCtrl->top - 1);
+						keyWinOn(keyWin, sheetWinNotepad, &cursor_c);
 					}
 					if(i - 256 == 0x1c){	/* 回车键 */
-						if(key_to != 0){
-							fifo32_put(&taskCmd->fifo, 10 + 256);
+						if(keyWin != sheetWinNotepad){
+							fifo32_put(&keyWin->task->fifo, 10 + 256);
 						}
 					}
 
@@ -357,15 +358,57 @@ void HariMain(void)
 						sheet_slide(sheetMouse, mx, my);
 
 						if((mdec.btn & 0x01) != 0){	/* 按下左键 */
-							sprintf(s, "top: %d", sheetCtrl->top);
-							putStrOnSheet_BG(sheetBack, 100, 120, COL8_000000, COL8_FFFFFF, s);
-							if(curTopSheet != mouseMove[curMove]){
-								curTopSheet = mouseMove[curMove];
-								sheet_updown(curTopSheet, sheetCtrl->top - 1);
-							}
 
-							sheet_slide(curTopSheet, mx - 80, my -8);
-							// sheet_updown(mouseMove[curMove], sheetCtrl->top - 1);
+							if(mmx < 0){
+								/* 如果处于普通模式 */
+								for(j = sheetCtrl->top - 1; j > 0; j--){	/* 从上往下找鼠标指向的图层 */
+									tempSheet = sheetCtrl->sheets[j];
+									mInShtX = mx - tempSheet->vx0;
+									mInShtY = my - tempSheet->vy0;
+									/* 窗口矩形点击判断 */
+									if(0 <= mInShtX && mInShtX < tempSheet->bxsize 
+									&& 0 <= mInShtY && mInShtY < tempSheet->bysize){
+										/* 窗口点击判断 */
+										if(tempSheet->buf[mInShtY * tempSheet->bxsize + mInShtX] != tempSheet->col_inv){	
+
+											sheet_updown(tempSheet, sheetCtrl->top - 1);
+
+											// if(tempSheet != sheetWinNotepad){
+												keyWinOff(keyWin, sheetWinNotepad, &cursor_c, cursor_x);
+												keyWin = tempSheet;
+												keyWinOn(keyWin, sheetWinNotepad, &cursor_c);
+											// }
+
+											if(3 <= mInShtX && mInShtX < tempSheet->bxsize - 3 
+											&& 0 <= mInShtY && mInShtY < 21){	/* 窗口标题栏点击判断 */
+												mmx = mx;
+												mmy = my;
+											}
+											if(tempSheet->bxsize - 21 <= mInShtX && mInShtX < tempSheet->bxsize - 5
+											&& 5 <= mInShtY && mInShtY < 19 ){	/* 窗口标题栏关闭按钮点击判断 */
+												if((tempSheet->flags & 0x10) != 0){	/* 该窗口是否为应用窗口 */
+													cons = (CONSOLE *) *((int *) 0x0fec);
+													cons_putstr(cons, "\nBreak Mouse\n");
+													io_cli();
+													taskCmd->tss.eax = (int) &(taskCmd->tss.esp0);
+													taskCmd->tss.eip = (int) asm_end_app;
+													io_sti();
+												}
+											}
+											break;
+										}
+									}
+								}
+							}else{
+								/* 如果处于窗口移动模式 */
+								mInShtX = mx - mmx;
+								mInShtY = my - mmy;
+								sheet_slide(tempSheet, tempSheet->vx0 + mInShtX, tempSheet->vy0 + mInShtY);
+								mmx = mx;
+								mmy = my;
+							}
+						}else{
+							mmx = -1;
 						}
 					}
 					break;

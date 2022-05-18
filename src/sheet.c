@@ -31,8 +31,9 @@ SHEET *sheet_alloc(SHEETCTRL *ctrl){
     for(i = 0; i < MAX_SHEETS; i++){
         if(ctrl->sheets0[i].flags == 0){
             sheet = &ctrl->sheets0[i];
-            ctrl->sheets0[i].flags = SHEET_USE;
+            sheet->flags = SHEET_USE;
             sheet->height = -1; /* 隐藏 */
+            sheet->task = 0;    /* 不使用自动关闭功能 */
             return sheet;
         }
     }

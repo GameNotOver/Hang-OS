@@ -26,10 +26,10 @@ APPPATH	 = ./app/
 
 OBJS_BOOTPACK = bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
-	data.obj timer.obj multitask.obj console.obj file.obj
+	data.obj timer.obj multitask.obj console.obj file.obj windows.obj
 
 APPS = nas_loop.hrb nas_c.hrb nas_s.hrb c_c.hrb c_s.hrb \
-	crack.hrb bug.hrb bug2.hrb opwin.hrb
+	crack.hrb bug.hrb bug2.hrb opwin.hrb walk.hrb noodle.hrb beepdown.hrb
 
 COPY_APPS		= $(foreach elem, $(APPS), copy from:$(APPPATH)$(elem) to:@: \${\n})	
 

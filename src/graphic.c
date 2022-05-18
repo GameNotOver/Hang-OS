@@ -123,95 +123,6 @@ void putblock8_8(char *vram, int vxsize, int pxsize,
 	return;
 }
 
-void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act){
-
-	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
-
-	BUFFER buf = (BUFFER) memman_alloc_4k(memman, xsize * ysize);
-	sheet_setbuf(sheet, buf, xsize, ysize, -1);
-
-	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         xsize - 1, 0        );
-	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         xsize - 2, 1        );
-	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         0,         ysize - 1);
-	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         1,         ysize - 2);
-	boxfill8(buf, xsize, COL8_848484, xsize - 2, 1,         xsize - 2, ysize - 2);
-	boxfill8(buf, xsize, COL8_000000, xsize - 1, 0,         xsize - 1, ysize - 1);
-	boxfill8(buf, xsize, COL8_C6C6C6, 2,         2,         xsize - 3, ysize - 3);
-	boxfill8(buf, xsize, COL8_848484, 1,         ysize - 2, xsize - 2, ysize - 2);
-	boxfill8(buf, xsize, COL8_000000, 0,         ysize - 1, xsize - 1, ysize - 1);
-
-	set_win_title_bar(sheet, title, act);
-}
-
-void make_window8_buf(SHEET *sheet, char* buf, int xsize, int ysize, char *title, char act){
-
-	sheet_setbuf(sheet, buf, xsize, ysize, -1);
-
-	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         xsize - 1, 0        );
-	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         xsize - 2, 1        );
-	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         0,         ysize - 1);
-	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         1,         ysize - 2);
-	boxfill8(buf, xsize, COL8_848484, xsize - 2, 1,         xsize - 2, ysize - 2);
-	boxfill8(buf, xsize, COL8_000000, xsize - 1, 0,         xsize - 1, ysize - 1);
-	boxfill8(buf, xsize, COL8_C6C6C6, 2,         2,         xsize - 3, ysize - 3);
-	boxfill8(buf, xsize, COL8_848484, 1,         ysize - 2, xsize - 2, ysize - 2);
-	boxfill8(buf, xsize, COL8_000000, 0,         ysize - 1, xsize - 1, ysize - 1);
-
-	set_win_title_bar(sheet, title, act);
-}
-
-void set_win_title_bar(SHEET *sheet, char *title, char act){
-	int x, y;
-	char c, title_color, title_bar_color;
-	if(act != 0){
-		title_color = COL8_FFFFFF;
-		title_bar_color = COL8_000084;
-	}else{
-		title_color = COL8_C6C6C6;
-		title_bar_color = COL8_848484;
-	}
-	extern char closebtn[14][16];
-	boxfill8(sheet->buf, sheet->bxsize, title_bar_color, 3, 3, sheet->bxsize - 4, 20);
-	putfonts8_asc(sheet->buf, sheet->bxsize, 24, 4, title_color, title);
-	for(y = 0; y < 14; y++){
-		for(x = 0; x < 16; x++){
-			c = closebtn[y][x];
-			switch (c){
-				case '@':
-					c = COL8_000000;
-					break;
-				case '$':
-					c = COL8_848484;
-					break;
-				case 'Q':
-					c = COL8_C6C6C6;
-					break;
-				case 'O':
-					c = COL8_FFFFFF;
-					break;
-				default:
-					break;
-			}
-			sheet->buf[(5 + y) * sheet->bxsize + (sheet->bxsize - 21 + x)] = c;
-		}
-	}
-}
-
-void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c)
-{
-	int x1 = x0 + sx, y1 = y0 + sy;
-	boxfill8(sheet->buf, sheet->bxsize, COL8_848484, x0 - 2, y0 - 3, x1 + 1, y0 - 3);
-	boxfill8(sheet->buf, sheet->bxsize, COL8_848484, x0 - 3, y0 - 3, x0 - 3, y1 + 1);
-	boxfill8(sheet->buf, sheet->bxsize, COL8_FFFFFF, x0 - 3, y1 + 2, x1 + 1, y1 + 2);
-	boxfill8(sheet->buf, sheet->bxsize, COL8_FFFFFF, x1 + 2, y0 - 3, x1 + 2, y1 + 2);
-	boxfill8(sheet->buf, sheet->bxsize, COL8_000000, x0 - 1, y0 - 2, x1 + 0, y0 - 2);
-	boxfill8(sheet->buf, sheet->bxsize, COL8_000000, x0 - 2, y0 - 2, x0 - 2, y1 + 0);
-	boxfill8(sheet->buf, sheet->bxsize, COL8_C6C6C6, x0 - 2, y1 + 1, x1 + 0, y1 + 1);
-	boxfill8(sheet->buf, sheet->bxsize, COL8_C6C6C6, x1 + 1, y0 - 2, x1 + 1, y1 + 1);
-	boxfill8(sheet->buf, sheet->bxsize, c,           x0 - 1, y0 - 1, x1 + 0, y1 + 0);
-	return;
-}
-
 void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str){
 	int strLen = stringlength(str);
 	putfonts8_asc(sheet->buf, sheet->bxsize, x, y, font_color, str);
@@ -229,4 +140,49 @@ void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, 
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color){
 	boxfill8(sheet->buf, sheet->bxsize, color, x, y, x + sx - 1, y + sy - 1);
 	sheet_refresh(sheet, x, y, x + sx + 1, y + sy + 1);
+}
+
+void putLineOnSheet(SHEET *sheet, int x0, int y0, int x1, int y1, int color){
+	int i, x, y, len, dx, dy;
+	dx = x1 - x0;
+	dy = y1 - y0;
+	x = x0 << 10;
+	y = y0 << 10;
+	if(dx < 0)
+		dx = -dx;
+	if(dy < 0)
+		dy = -dy;
+	if(dx >= dy){
+		len = dx + 1;
+
+		if(x1 - x0 < 0)
+			dx = -1024;
+		else
+			dx = 1024;
+		
+		if(y0 <= y1)
+			dy = ((y1 - y0 + 1) << 10) / len;
+		else
+			dy = ((y1 - y0 - 1) << 10) / len;
+	}else{
+		len = dy + 1;
+
+		if(y0 > y1)
+			dy = -1024;
+		else
+			dy = 1024;
+		
+		if(x0 <= x1)
+			dx = ((x1 - x0 + 1) << 10) / len;
+		else
+			dx = ((x1 - x0 - 1) << 10) / len;
+	}
+
+	for(i = 0; i < len; i++){
+		sheet->buf[(y >> 10) * sheet->bxsize + (x >> 10)] = color;
+		x += dx;
+		y += dy;
+	}
+
+	return;
 }

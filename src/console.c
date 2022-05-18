@@ -4,7 +4,6 @@
 
 void console_task(SHEET *sheet, unsigned int memtotal){
 
-	TIMER *timer;
 	TASK *task = task_current();
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	int *fat = (int *) memman_alloc_4k(memman, 4 * 2880);
@@ -27,12 +26,14 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 
 	init_fifo32(&task->fifo, 128, fifoBuf, task);
 
-	timer = timer_alloc();
-	timer_init(timer, &task->fifo, 0);
-	timer_settimer(timer, 50);
+	cons.timer = timer_alloc();
+	timer_init(cons.timer, &task->fifo, 0);
+	timer_settimer(cons.timer, 50);
 
 	/* 显示提示符 */
 	cons_putchar(&cons, '>', 1);
+
+	char s[10];
 
 	while(1){	
 		io_cli();
@@ -45,9 +46,9 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 			io_sti();
 
 			switch(i){
-				case 0: case 0xff:
-					timer_init(timer, &task->fifo, ~i);
-					timer_settimer(timer, 50);
+				case 0: case 0xffffffff:
+					timer_init(cons.timer, &task->fifo, ~i);
+					timer_settimer(cons.timer, 50);
 
 					if(cons.cur_c >= 0)
 						cons.cur_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
@@ -249,11 +250,14 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	FILEINFO *finfo;
 	SEGMENT_DESCRIPTOR *gdt = (SEGMENT_DESCRIPTOR *) ADR_GDT;
+	SHEETCTRL *sheetCtrl = (SHEETCTRL *) *((int *) 0x0fe4);
+	SHEET *sheet;
 	char *img_file = (char *) (ADR_DISKIMG + 0x003e00);
 	char *fileBuf;
 	char *appBuf;
 
 	TASK *task = task_current();
+	char s[10];
 
 	char fname[18];
 	char para[18];
@@ -272,7 +276,7 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	if(finfo != NULL){	/* 找到文件的情况 */
 		fileBuf = (char *) memman_alloc_4k(memman, finfo->size);
 		file_loadfile(finfo->clustno, finfo->size, fileBuf, fat, img_file);
-		if(finfo->size >= 8 && strcmp_len(fileBuf + 4, "Hari", 4) == 0){
+		if(finfo->size >= 8 && strcmp_len(fileBuf + 4, "Hari", 4) == 0){						/* os_api程序启动 */
 			//JMP	0x1b		; e8 16 00 00 00 cb
 			segsiz = *((int *) (fileBuf + 0x0000));
 			esp    = *((int *) (fileBuf + 0x000c));
@@ -287,12 +291,22 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 				appBuf[esp+i] = fileBuf[dathrb+i];
 			}
 			start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
-			memman_free(memman, (int) appBuf, segsiz);
+			for(i = 0; i < MAX_SHEETS; i++){
+				sheet = &(sheetCtrl->sheets0[i]);
+				/* SHEET_USE | APP_WIN == 0x11 */
+				if((sheet->flags & 0x11) == 0x11 && sheet->task == task){	
+					/* 找到被应用程序遗漏的窗口 */
+					sheet_free(sheet);	/* 关闭 */
+				}
+			}
+
+			timer_cancelall(&task->fifo);
+			memman_free_4k(memman, (int) appBuf, segsiz);
 		}else{
 			cons_putstr(cons, ".hrb file format error!\n");
 		}
 		
-		memman_free(memman, (int) fileBuf, finfo->size);
+		memman_free_4k(memman, (int) fileBuf, finfo->size);
 		cons_newline(cons);
 		return 1;
 	}
@@ -334,61 +348,135 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 		/* reg[4] : EBX,   reg[5] : EDX,   reg[6] : ECX,   reg[7] : EAX */
 
 	int len;
+	int i;
+
+	TIMER *tempTimer;
+
+	char s[10];
+	// SHEET *sheetBack = *((int *) 0x0fc4);
 	
 	switch(edx){
-		case 1:
+		case 1:		/* api_putchar */
 			cons_putchar(cons, eax & 0xff, 1);
 			break;
-		case 2:
+		case 2:		/* api_putstr */
 			cons_putstr(cons, (char *) ebx + ds_base);
 			break;
-		case 3:
+		case 3:		/*  */
 			cons_putstr_len(cons, (char *) ebx + ds_base, ecx);
 			break;
-		case 4:
+		case 4:		/* api_end */
 			return &(task->tss.esp0);
-		case 5:
+		case 5:		/* api_openwin */
 			sheet = sheet_alloc(sheetCtrl);
-			// make_window8_buf(sheet, (char *) ebx + ds_base, esi, edi, (char *) ecx + ds_base, 0);
+			sheet->task = task;
+			sheet->flags |= 0x10;	/* 标记为应用窗口 */
 			make_window8(sheet, esi, edi, (char *) ecx + ds_base, 0);
 			sheet_slide(sheet, 400, 300);
 			sheet_updown(sheet, 3);
 			reg[7] = (int) sheet;
 			break;
-		case 6:
+		case 6:		/* api_putstrwin */
 			sheet = (SHEET *) ebx;
 			putStrOnSheet(sheet, esi, edi, eax, (char *) ebp + ds_base);
 			len = strlen((char *) ebp + ds_base);
 			sheet_refresh(sheet, esi, edi, esi + len * 8, edi + 16);
 			break;
-		case 7:
+		case 7:		/* api_boxfilwin */
 			sheet = (SHEET *) ebx;
 			len = strlen((char *) ebp + ds_base);
 			boxfill8(sheet->buf, sheet->bxsize, ebp, eax, ecx, esi, edi);
 			sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
 			break;
-		case 8:
+		case 8:		/* api_initmalloc */
 			memman_init(memman);
 			ecx &= 0xfffffff0;	/* 以16字节为单位 */
 			memman_free(memman, eax, ecx);
 			break;
-		case 9:
+		case 9:		/* api_malloc */
 			ecx = (ecx + 0x0f) & 0xfffffff0;	/* 以16字节为单位进位取整 */
 			reg[7] = memman_alloc(memman, ecx);
 			break;
-		case 10:
+		case 10:	/* api_free */
 			ecx = (ecx + 0x0f) & 0xfffffff0;
 			memman_free(memman, eax, ecx);
 			break;
-		case 11:
+		case 11:	/* api_point */
 			sheet = (SHEET *) (ebx & 0xfffffffe);
 			sheet->buf[sheet->bxsize * edi + esi] = eax;
-			if(ebx & 1 == 0)
+			if((ebx & 1 )== 0)
 				sheet_refresh(sheet, esi, edi, esi + 1, edi + 1);
 			break;
-		case 12:
+		case 12:	/* api_refreshwin */
 			sheet = (SHEET *) ebx;
 			sheet_refresh(sheet, eax, ecx, esi, edi);
+			break;
+		case 13:	/* api_line */
+			sheet = (SHEET *) (ebx & 0xfffffffe);
+			putLineOnSheet(sheet, eax, ecx, esi, edi, ebp);
+			if((ebx & 1) == 0)
+				sheet_refresh(sheet, esi, edi, esi + 1, edi + 1);
+			break;
+		case 14:	/* api_closewin */
+			sheet = (SHEET *) ebx;
+			sheet_free(sheet);
+			break;
+		case 15:	/* api_getkey */
+			while(1){
+				io_cli();
+				if(fifo32_status(&task->fifo) == 0){
+					if(eax != 0)
+						task_sleep(task);
+					else{
+						io_sti();
+						reg[7] = -1;
+						return 0;
+					}
+				}
+				i = fifo32_get(&task->fifo);
+				io_sti();
+				if(i == 0 || i == 0xffffffff){
+					/* 应用程序运行时不需要显示光标， 因此总是将下次显示用的值置1 */
+					timer_init(cons->timer, &task->fifo, 0xffffffff);
+					timer_settimer(cons->timer, 50);
+				}
+				if(i == 2)	/* cursor on */
+					cons->cur_c = COL8_FFFFFF;
+				if(i == 3)	/* cursor off */
+					cons->cur_c = -1;
+				if(i >= 256){	/* 键盘数据 */
+					
+					reg[7] = i - 256;
+					return 0;
+				}
+			}
+			break;
+		case 16:	/* api_alloctimer */
+			tempTimer = (int) timer_alloc();
+			reg[7] = tempTimer;
+			tempTimer->flags_basic = TIMER_FLAGS_APP;	/* 允许自动取消 */
+			break;
+		case 17:	/* api_inittimer */
+			timer_init((TIMER *) ebx, &task->fifo, eax + 256);
+			break;
+		case 18:	/* api_settimer */
+			timer_settimer((TIMER *) ebx, eax);
+			break;
+		case 19:	/* api_freetimer */
+			timer_free((TIMER *) ebx);
+			break;
+		case 20:
+			if(eax == 0){
+				i = io_in8(0x61);
+				io_out8(0x61, i & 0x0d);
+			}else{
+				i = 1193180000 / eax;
+				io_out8(0x43, 0xb6);
+				io_out8(0x42, i & 0xff);
+				io_out8(0x42, i >> 8);
+				i = io_in8(0x61);
+				io_out8(0x61, (i | 0x03) & 0x0f);
+			}
 			break;
 		default :
 			break;

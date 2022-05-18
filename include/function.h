@@ -44,11 +44,18 @@ void putblock8_8(char *vram, int vxsize, int pxsize, int pysize, int px0, int py
 void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str);
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color);
 void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, char *str);
+void putLineOnSheet(SHEET *sheet, int x0, int y0, int x1, int y1, int color);
 
+
+
+/* windows.c */
 void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act);
 void set_win_title_bar(SHEET *sheet, char *title, char act);
 void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c);
 void make_window8_buf(SHEET *sheet, char* buf, int xsize, int ysize, char *title, char act);
+void keyWinOff(SHEET *keyWin, SHEET *sheetNotepad, int *cur_c, int cur_x);
+void keyWinOn(SHEET *keyWin, SHEET *sheetNotepad, int *cur_c);
+void changeWinTitle(SHEET *sheet, char act);
 
 /* dsctbl.c */
 void init_gdtidt(void);
@@ -114,8 +121,10 @@ void init_pit();
 void inthandler20(int *esp);
 TIMER *timer_alloc(void);
 void timer_free(TIMER *timer);
-void timer_init(TIMER *timer, FIFO32 *fifo, unsigned char data);
+void timer_init(TIMER *timer, FIFO32 *fifo, int data);
 void timer_settimer(TIMER *timer, unsigned int timeout);
+int timer_cancel(TIMER *timer);
+void timer_cancelall(FIFO32 *fifo);
 
 /* multitask.c */
 TASK *task_init(MEMMAN *man);

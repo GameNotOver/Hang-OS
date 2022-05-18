@@ -1,6 +1,8 @@
 #include "../include/function.h"
-
+#include <stdio.h>
 TIMER_CRTL timerCtrl;
+
+int timer_counter = 0;
 
 /* Programmable Interval Timer */
 void init_pit(){
@@ -58,8 +60,9 @@ void inthandler20(int *esp){
 TIMER *timer_alloc(void){
     int i;
     for(i = 0; i < MAX_TIMER; i++){
-        if(timerCtrl.timers[i].flags == 0){
+        if(timerCtrl.timers[i].flags == TIMER_FLAGS_FREE){
             timerCtrl.timers[i].flags = TIMER_FLAGS_ALLOC;
+            timerCtrl.timers[i].flags_basic = TIMER_FLAGS_BASIC;
             return &timerCtrl.timers[i];
         }
     }
@@ -71,7 +74,7 @@ void timer_free(TIMER *timer){
     return;
 }
 
-void timer_init(TIMER *timer, FIFO32 *fifo, unsigned char data){
+void timer_init(TIMER *timer, FIFO32 *fifo, int data){
     timer->fifo = fifo;
     timer->data = data;
     return;
@@ -108,6 +111,64 @@ void timer_settimer(TIMER *timer, unsigned int timeout){
 }
 
 
+int timer_cancel(TIMER *timer){
+    int eflags;
+    TIMER *t;
 
+    char s[10];
+    SHEET *sheetBack = *((int *) 0x0fc4);
+    
 
+    eflags = io_load_eflags();
+    
+    io_cli();   /* 在设置中禁止改变定时器状态 */
+    if(timer->flags == TIMER_FLAGS_USING){
+        
+        if(timer == timerCtrl.head){    /* 如果是第一个定时器 */
 
+            timerCtrl.head = timer->next;
+            timerCtrl.next_timeout = timerCtrl.head->timeout;
+            // sprintf(s, "%d", timer->data-256);
+            // putStrOnSheet_BG(sheetBack, 100, 120, COL8_FFFFFF, COL8_000000, s);
+        }else{
+            // sprintf(s, "%d", timer->data-256);
+            // putStrOnSheet_BG(sheetBack, 100, 120, COL8_FFFFFF, COL8_000000, s);
+            t = timerCtrl.head;
+            while(t->next != timer){
+                t = t->next;
+            }
+            t->next = t->next->next;
+        }
+        timer->flags == TIMER_FLAGS_ALLOC;
+        io_store_eflags(eflags);
+        return 1;
+    }
+    // sprintf(s, "%d", timer->flags);
+    // putStrOnSheet_BG(sheetBack, 100, 120, COL8_FFFFFF, COL8_000000, s);
+    io_store_eflags(eflags);
+    return 0;
+}
+
+void timer_cancelall(FIFO32 *fifo){
+    int eflags;
+    int i;
+    TIMER *t;
+    eflags = io_load_eflags();
+    char s[10];
+    SHEET *sheetBack = *((int *) 0x0fc4);
+    i = 0;
+
+    io_cli();   
+    for(i = 0; i < MAX_TIMER; i++){
+        t = &timerCtrl.timers[i];
+        if(t->flags != TIMER_FLAGS_FREE && t->flags_basic != TIMER_FLAGS_BASIC && t->fifo == fifo){
+            // i++;
+            // sprintf(s, "%d", i);
+            // putStrOnSheet_BG(sheetBack, 100, 120, COL8_FFFFFF, COL8_000000, s);
+            timer_cancel(t);
+            timer_free(t);
+        }
+    }
+    io_store_eflags(eflags);
+    return;
+}
