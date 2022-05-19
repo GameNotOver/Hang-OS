@@ -147,6 +147,10 @@ void sheet_refreshsub(SHEETCTRL *ctrl, int vx0, int vy0, int vx1, int vy1, int h
     unsigned char *map = ctrl->map;
     unsigned char sid;
     SHEET *sheet;
+    int sid4;
+    int bx2;
+    int j, j1;
+    int *map_ptr, *vram_ptr, *buf_ptr;
 
     /* 如果refresh的范围超出了画面则修正 */
     vx0 = max(0, vx0);
@@ -165,15 +169,65 @@ void sheet_refreshsub(SHEETCTRL *ctrl, int vx0, int vy0, int vx1, int vy1, int h
         bx1 = min(sheet->bxsize, vx1 - sheet->vx0);
         by1 = min(sheet->bysize, vy1 - sheet->vy0);
 
-        for(by = by0; by < by1; by++){
-            vy = sheet->vy0 + by;
-            for(bx = bx0; bx < bx1; bx++){
+        if((sheet->vx0 & 3) == 0){
+            /* 4字节型 */
+            j = (bx0 + 3) / 4;  /* bx0除以4，小数进位 */
+            j1 = bx1 / 4;       /* bx0除以4，小数舍去 */
+            j1 = j1 - j;
+            sid4 = sid | sid << 8 | sid << 16 | sid << 24;
+            for(by = by0; by < by1; by++){
+                vy = sheet->vy0 + by;
+                for(bx = bx0; bx < bx1 && (bx & 3) != 0; bx++){  /* 前面被4除多余的部分逐个字节写入 */
+                    vx = sheet->vx0 + bx;
+                    if(map[vy * ctrl->xsize + vx] == sid){
+                        vram[vy * ctrl->xsize + vx] = buf[by * sheet->bxsize + bx];
+                    }
+                }
+
                 vx = sheet->vx0 + bx;
-                if(map[vy * ctrl->xsize + vx] == sid){
-                    vram[vy * ctrl->xsize + vx] = buf[by * sheet->bxsize + bx];
+                map_ptr = (int *) &map[vy * ctrl->xsize + vx];
+                vram_ptr = (int *) &vram[vy * ctrl->xsize + vx];
+                buf_ptr = (int *) &buf[by * sheet->bxsize + bx];
+                for(j = 0; j < j1; j++){                        /* 中间4的倍数部分，按4字节为单位写入 */
+                    if(map_ptr[j] == sid4){
+                        /* 提速的主要部分 */     
+                        vram_ptr[j] = buf_ptr[j];
+                    }else{
+                        bx2 = bx + j * 4;
+                        vx = sheet->vx0 + bx2;
+                        if(map[vy * ctrl->xsize + vx + 0] == sid)
+                            vram[vy * ctrl->xsize + vx + 0] = buf[by * sheet->bxsize + bx2 + 0];
+                        if(map[vy * ctrl->xsize + vx + 1] == sid)
+                            vram[vy * ctrl->xsize + vx + 1] = buf[by * sheet->bxsize + bx2 + 1];
+                        if(map[vy * ctrl->xsize + vx + 2] == sid)
+                            vram[vy * ctrl->xsize + vx + 2] = buf[by * sheet->bxsize + bx2 + 2];
+                        if(map[vy * ctrl->xsize + vx + 3] == sid)
+                            vram[vy * ctrl->xsize + vx + 3] = buf[by * sheet->bxsize + bx2 + 3];
+                    }
+                }
+
+                for(bx += j1 * 4; bx < bx1; bx++){              /* 后面被4除多余的部分逐个字节写入 */
+                    vx = sheet->vx0 + bx;
+                    if(map[vy * ctrl->xsize + vx] == sid){
+                        vram[vy * ctrl->xsize + vx] = buf[by * sheet->bxsize + bx];
+                    }
+                }
+
+            }
+        }else{
+            /* 1字节型 */
+            for(by = by0; by < by1; by++){
+                vy = sheet->vy0 + by;
+                for(bx = bx0; bx < bx1; bx++){
+                    vx = sheet->vx0 + bx;
+                    if(map[vy * ctrl->xsize + vx] == sid){
+                        vram[vy * ctrl->xsize + vx] = buf[by * sheet->bxsize + bx];
+                    }
                 }
             }
         }
+
+        
     }
     return;
 }
@@ -186,6 +240,8 @@ void sheet_refreshmap(SHEETCTRL *ctrl, int vx0, int vy0, int vx1, int vy1, int h
     unsigned char *buf, sid;
     unsigned char *map = ctrl->map;
     SHEET *sheet;
+
+    int sid4, *p;
 
     vx0 = max(0, vx0);
     vy0 = max(0, vy0);
@@ -202,15 +258,41 @@ void sheet_refreshmap(SHEETCTRL *ctrl, int vx0, int vy0, int vx1, int vy1, int h
         bx1 = min(sheet->bxsize, vx1 - sheet->vx0);
         by1 = min(sheet->bysize, vy1 - sheet->vy0);
 
-        for(by = by0; by < by1; by++){
-            vy = sheet->vy0 + by;
-            for(bx = bx0; bx < bx1; bx++){
-                vx = sheet->vx0 + bx;
-                if(buf[by * sheet->bxsize + bx] != sheet->col_inv){
-                    map[vy * ctrl->xsize + vx] = sid;
+        if(sheet->col_inv == TRSPRT_OFF){   /* 无透明色高速版 */
+            if((sheet->vx0 & 3) == 0 && (bx0 & 3) == 0 && (bx1 & 3) == 0){  
+                /* 每次写入4个字节版 */
+                bx1 = (bx1 - bx0) / 4;   /* MOV次数 */
+                sid4 = sid | sid << 8 | sid << 16 | sid << 24;
+                for(by = by0; by < by1; by++){
+                    vy = sheet->vy0 + by;
+                    vx = sheet->vx0 + bx0;
+                    p = (int *) &map[vy * ctrl->xsize + vx];
+                    for(bx = 0; bx < bx1; bx++){
+                        p[bx] = sid4;
+                    }
+                }
+            }else{
+                /* 每次写入1个字节版 */
+                for(by = by0; by < by1; by++){
+                    vy = sheet->vy0 + by;
+                    for(bx = bx0; bx < bx1; bx++){
+                        vx = sheet->vx0 + bx;
+                        map[vy * ctrl->xsize + vx] = sid;
+                    }
+                }
+            }
+        }else{                              /* 有透明色普通版 */
+            for(by = by0; by < by1; by++){
+                vy = sheet->vy0 + by;
+                for(bx = bx0; bx < bx1; bx++){
+                    vx = sheet->vx0 + bx;
+                    if(buf[by * sheet->bxsize + bx] != sheet->col_inv){
+                        map[vy * ctrl->xsize + vx] = sid;
+                    }
                 }
             }
         }
+        
 
     }
 }

@@ -5,9 +5,23 @@ void init_palette(void)
 {
 	/* data.c */
 	extern unsigned char table_rgb[16 * 3];
-	set_palette(0, 15, table_rgb);
-	return;
 
+	unsigned char table2[216 * 3];
+	int r, g, b;
+
+	set_palette(0, 15, table_rgb);
+
+	for(b = 0; b < 6; b++){
+		for(g = 0; g < 6; g++){
+			for(r = 0; r < 6; r++){
+				table2[(r + g * 6 + b * 36) * 3 + 0] = r * 51;
+				table2[(r + g * 6 + b * 36) * 3 + 1] = g * 51;
+				table2[(r + g * 6 + b * 36) * 3 + 2] = b * 51;
+			}
+		}
+	}
+	set_palette(16, 231, table2);
+	return;
 	/*static char命令只能用于数据，但相当于DB命令*/
 }
 
@@ -87,7 +101,7 @@ void putfonts8_asc(char *vram, int xsize, int x, int y, char c, unsigned char *s
 	return;
 }
 
-void init_mouse_cursor8(char *mouse, char bc)
+void init_mouse_cursor8(char *mouse, int bc)
 /*准备鼠标光标（16×16）*/
 {
 	/* data.c */
@@ -185,4 +199,13 @@ void putLineOnSheet(SHEET *sheet, int x0, int y0, int x1, int y1, int color){
 	}
 
 	return;
+}
+
+showMousePosition(int mx, int my){
+	int bgColor;
+	char s[11];
+	SHEET *sheetBack = *((int *) 0x0fc4);
+	sprintf(s, "(%3d, %3d)", mx, my);
+	bgColor = sheetBack->buf[0 * sheetBack->bxsize + 0];
+	putStrOnSheet_BG(sheetBack, 0, 0, COL8_000000, bgColor, s);
 }

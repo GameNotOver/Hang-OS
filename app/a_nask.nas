@@ -43,21 +43,21 @@ _api_openwin:    ; int api_openwin(int xsiz, int ysiz, char *title); char *buf ,
         POP     EDI
         RET
 
-; _api_openwin_buf:	; int api_openwin_buf(char *buf, int xsiz, int ysiz, char *title);
-;         PUSH    EDI
-;         PUSH    ESI
-;         PUSH    EBX
-;         MOV     EDX, 11
-;         MOV     EBX, [ESP+16]           ; buf
-;         MOV     ESI, [ESP+20]           ; xsiz
-;         MOV     EDI, [ESP+24]           ; ysiz
-;         ; MOV     EAX, [ESP+28]           ; col_inv
-;         MOV     ECX, [ESP+28]           ; title
-;         INT     0x40
-;         POP     EBX
-;         POP     ESI
-;         POP     EDI
-;         RET		
+_api_openwin_buf:	; int api_openwin_buf(char *buf, int xsiz, int ysiz, char *title);
+        PUSH    EDI
+        PUSH    ESI
+        PUSH    EBX
+        MOV     EDX, 0xff
+        MOV     EBX, [ESP+16]           ; buf
+        MOV     ESI, [ESP+20]           ; xsiz
+        MOV     EDI, [ESP+24]           ; ysiz
+        ; MOV     EAX, [ESP+28]           ; col_inv
+        MOV     ECX, [ESP+28]           ; title
+        INT     0x40
+        POP     EBX
+        POP     ESI
+        POP     EDI
+        RET		
 
 
 _api_putstrwin:	; void api_putstrwin(int win, int x, int y, int col, char *str);
@@ -103,7 +103,7 @@ _api_initmalloc:	; void api_initmalloc(void);
 		MOV		EDX, 8
 		MOV		EBX, [CS:0x0020]	; malloc内存空间的地址
 		MOV		EAX, EBX
-		MOV		EAX, 32*1024		; 加上32KB
+		ADD		EAX, 32*1024		; 加上32KB
 		MOV		ECX, [CS:0X0000]	; 数据段大小
 		SUB		ECX, EAX
 		INT		0X40

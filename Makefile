@@ -27,9 +27,10 @@ APPPATH	 = ./app/
 OBJS_BOOTPACK = bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
 	data.obj timer.obj multitask.obj console.obj file.obj windows.obj
-
-APPS = nas_loop.hrb nas_c.hrb nas_s.hrb c_c.hrb c_s.hrb \
-	crack.hrb bug.hrb bug2.hrb opwin.hrb walk.hrb noodle.hrb beepdown.hrb
+# nas_loop.hrb nas_c.hrb nas_s.hrb c_c.hrb c_s.hrb \
+	crack.hrb bug.hrb bug2.hrb opwin.hrb walk.hrb noodle.hrb beepdown.hrb 
+APPS = color.hrb \
+	color2.hrb
 
 COPY_APPS		= $(foreach elem, $(APPS), copy from:$(APPPATH)$(elem) to:@: \${\n})	
 
@@ -75,11 +76,11 @@ asmhead.bin : $(SRCPATH)asmhead.nas Makefile
 %.bim: %.obj $(APPPATH)%.c $(APPPATH)a_nask.obj Makefile
 	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj $(APPPATH)a_nask.obj
 
-%.bim: %.obj Makefile
-	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj
+# %.bim: %.obj Makefile
+#	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj
 
 %.hrb: %.bim  Makefile
-	$(BIM2HRB) $*.bim $(APPPATH)$*.hrb 0
+	$(BIM2HRB) $*.bim $(APPPATH)$*.hrb 56k
 
 a_nask.obj: $(APPPATH)a_nask.nas Makefile
 	$(NASK) $(APPPATH)a_nask.nas a_nask.obj a_nask.lst
@@ -120,6 +121,8 @@ haribote.img : ipl10.bin haribote.sys $(foreach elem, $(APPS), $(APPPATH)$(elem)
 
 img :
 	$(MAKE) haribote.img
+
+# $(MAKE) myapp
 
 run :
 	$(MAKE) myapp

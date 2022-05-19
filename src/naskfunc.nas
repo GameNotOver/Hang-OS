@@ -400,13 +400,10 @@ _start_app:		; void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
 		MOV		EBP, [ESP+52]			; tss.esp0的地址
 		MOV		[EBP], ESP				; 保存操作系统用ESP
 		MOV		[EBP+4], SS				; 保存操作系统用SS
-		; CLI								; 切换过程中关中断
 		MOV		ES, BX
-		; MOV		SS, BX
 		MOV		DS, BX
 		MOV		FS, BX
 		MOV		GS, BX
-		; MOV		ESP, EDX
 ; 下面调整栈，以免用RETF跳转到应用程序
 		OR		ECX, 3					; 将应用程序用段号和3进行OR运算
 		OR		EBX, 3					; 将应用程序用段号和3进行OR运算
@@ -416,25 +413,6 @@ _start_app:		; void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
 		PUSH	EAX						; 应用程序的EIP
 		RETF
 ;应用程序结束后不会回到这里
-
-; 		STI								; 切换完成开中断
-; 		PUSH	ECX						; 用于far-CALL的PUSH(cs)
-; 		PUSH	EAX						; 用于far-CALL的PUSH(eip)
-; 		CALL	FAR [ESP]				; 调用应用程序
-
-; ; 应用程序结束后返回此处
-
-; 		MOV		EAX, 1*8				; 操作系统用DS/SS	
-; 		CLI								; 再次进行切换，关中断
-; 		MOV		ES, AX
-; 		MOV		SS, AX
-; 		MOV		DS, AX
-; 		MOV		FS, AX
-; 		MOV		GS, AX
-; 		MOV		ESP, [0xfe4]
-; 		STI								; 切换完成，开中断
-; 		POPAD							; 恢复之前保存的寄存器的值
-; 		RET
 
 
 

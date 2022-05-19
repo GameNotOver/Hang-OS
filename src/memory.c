@@ -59,7 +59,7 @@ unsigned int memman_alloc(MEMMAN *man, unsigned int size){
 			if(man->free[i].size == 0){
 				man->frees--;			/* 如果free[i]的大小变为0，就减少一条可用信息 */
 				for(; i < man->frees; i++){
-					man->free[i] = man->free[i+1];
+					man->free[i] = man->free[i + 1];
 				}
 			}
 			return addr;

@@ -11,7 +11,6 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 
 	int i;
 	char cmdline[30];
-	int fifoBuf[128];
 
     unsigned char *img_fat = (unsigned char *) (ADR_DISKIMG + 0x000200);
 
@@ -22,9 +21,8 @@ void console_task(SHEET *sheet, unsigned int memtotal){
     cons.cur_y = 28;
     cons.cur_c = -1;
 
-	*((int *) 0x0fec) = (int) &cons;
-
-	init_fifo32(&task->fifo, 128, fifoBuf, task);
+	// *((int *) 0x0fec) = (int) &cons;
+	task->cons = &cons;
 
 	cons.timer = timer_alloc();
 	timer_init(cons.timer, &task->fifo, 0);
@@ -90,6 +88,36 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 		}
 	}
 	
+}
+
+SHEET *open_console(){
+	SHEETCTRL *sheetCtrl = *((int *) 0x0fe4);
+	int memtotal = *((int *) 0x0fe8);
+
+	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
+
+	SHEET *sheetCmd = sheet_alloc(sheetCtrl);
+	TASK *taskCmd = task_alloc();
+	int *fifoBufCmd = (int *) memman_alloc_4k(memman, 128 * sizeof(int));
+	make_window8(sheetCmd, 256, 165, "console", 0);
+	make_textbox8(sheetCmd, 8, 28, 240, 128, COL8_000000);
+
+	taskCmd->tss.eip = (int) &console_task;
+	taskCmd->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 12;
+	taskCmd->tss.es = 1 * 8;
+	taskCmd->tss.cs = 2 * 8;	/* GDT的2号 */
+	taskCmd->tss.ss = 1 * 8;
+	taskCmd->tss.ds = 1 * 8;
+	taskCmd->tss.fs = 1 * 8;
+	taskCmd->tss.gs = 1 * 8;
+	*((int *) (taskCmd->tss.esp + 4)) = (int) sheetCmd;
+	*((int *) (taskCmd->tss.esp + 8)) = memtotal;
+	task_run(taskCmd, 2, 2);	/* level = 2; priority = 2 */
+	sheetCmd->task = taskCmd;
+	sheetCmd->flags |= 0x20;	/* 有光标 */
+	init_fifo32(&taskCmd->fifo, 128, fifoBufCmd, taskCmd);
+
+	return sheetCmd;
 }
 
 void cons_newline(CONSOLE *cons){
@@ -276,21 +304,24 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	if(finfo != NULL){	/* 找到文件的情况 */
 		fileBuf = (char *) memman_alloc_4k(memman, finfo->size);
 		file_loadfile(finfo->clustno, finfo->size, fileBuf, fat, img_file);
-		if(finfo->size >= 8 && strcmp_len(fileBuf + 4, "Hari", 4) == 0){						/* os_api程序启动 */
+		if(finfo->size >= 36 && strcmp_len(fileBuf + 4, "Hari", 4) == 0 && *fileBuf == 0x00){						/* os_api程序启动 */
 			//JMP	0x1b		; e8 16 00 00 00 cb
 			segsiz = *((int *) (fileBuf + 0x0000));
 			esp    = *((int *) (fileBuf + 0x000c));
 			datsiz = *((int *) (fileBuf + 0x0010));
 			dathrb = *((int *) (fileBuf + 0x0014));
 			appBuf = (char *) memman_alloc_4k(memman, segsiz);
-			*((int *) 0xfe8) = (int) appBuf;	/* 存储代码段的起始位置 */
-			set_segmdesc(gdt + 1003, finfo->size - 1, (int) fileBuf, AR_CODE32_ER + 0x60);
-			set_segmdesc(gdt + 1004, segsiz - 1, (int) appBuf, AR_DATA32_RW + 0x60);
+			//*((int *) 0xfe8) = (int) appBuf;	/* 存储代码段的起始位置 */
+			task->ds_base = appBuf;	/* 存储代码段的起始位置 */
+			set_segmdesc(gdt + task->selector / 8 + 1000, finfo->size - 1, (int) fileBuf, AR_CODE32_ER + 0x60);
+			set_segmdesc(gdt + task->selector / 8 + 2000, segsiz - 1, (int) appBuf, AR_DATA32_RW + 0x60);
 			int i;
 			for(i = 0; i < datsiz; i++){
 				appBuf[esp+i] = fileBuf[dathrb+i];
 			}
-			start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+
+			start_app(0x1b, task->selector + 1000 * 8, esp, task->selector + 2000 * 8, &(task->tss.esp0));
+			
 			for(i = 0; i < MAX_SHEETS; i++){
 				sheet = &(sheetCtrl->sheets0[i]);
 				/* SHEET_USE | APP_WIN == 0x11 */
@@ -335,12 +366,16 @@ void cons_putstr_len(CONSOLE *cons, char *str, int length){
 }
 
 int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax){
-	int ds_base = *((int *) 0xfe8);
+	
 	TASK *task = task_current();
-	CONSOLE *cons = (CONSOLE *) *((int *) 0xfec);
+	// int ds_base = *((int *) 0xfe8);
+	int ds_base = task->ds_base;
+	// CONSOLE *cons = (CONSOLE *) *((int *) 0xfec);
+	CONSOLE *cons = task->cons;
 	SHEETCTRL *sheetCtrl = (SHEETCTRL *) *((int *) 0x0fe4);
 	SHEET *sheet;
 	MEMMAN *memman = (MEMMAN *) (ebx + ds_base);
+	// MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	// SHEET *sb = (SHEET *) *((int *) 0x0fc4);
 	int *reg = &eax + 1;	/* eax后面的地址 */
 		/* 强行改写通过PUSHAD保存的值 */
@@ -353,7 +388,7 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 	TIMER *tempTimer;
 
 	char s[10];
-	// SHEET *sheetBack = *((int *) 0x0fc4);
+	SHEET *sheetBack = *((int *) 0x0fc4);
 	
 	switch(edx){
 		case 1:		/* api_putchar */
@@ -372,13 +407,13 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 			sheet->task = task;
 			sheet->flags |= 0x10;	/* 标记为应用窗口 */
 			make_window8(sheet, esi, edi, (char *) ecx + ds_base, 0);
-			sheet_slide(sheet, 400, 300);
-			sheet_updown(sheet, 3);
+			/* 为了发挥refreshmap函数，x坐标对4的倍数向下取整 */
+			sheet_slide(sheet, ((sheetCtrl->xsize - esi) / 2) & ~3, (sheetCtrl->ysize - edi) / 2);
+			sheet_updown(sheet, sheetCtrl->top);
 			reg[7] = (int) sheet;
 			break;
 		case 6:		/* api_putstrwin */
 			sheet = (SHEET *) ebx;
-			putStrOnSheet(sheet, esi, edi, eax, (char *) ebp + ds_base);
 			len = strlen((char *) ebp + ds_base);
 			sheet_refresh(sheet, esi, edi, esi + len * 8, edi + 16);
 			break;
@@ -478,6 +513,16 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 				io_out8(0x61, (i | 0x03) & 0x0f);
 			}
 			break;
+		case 0xff:	/* api_openwin_buf */
+			sheet = sheet_alloc(sheetCtrl);
+			sheet->task = task;
+			sheet->flags |= 0x10;	/* 标记为应用窗口 */
+			make_window8_buf(sheet, (char *) ebx + ds_base, esi, edi, (char *) ecx + ds_base, 0);
+			/* 为了发挥refreshmap函数，x坐标对4的倍数向下取整 */
+			sheet_slide(sheet, ((sheetCtrl->xsize - esi) / 2) & ~3, (sheetCtrl->ysize - edi) / 2);
+			sheet_updown(sheet, sheetCtrl->top);
+			reg[7] = (int) sheet;
+			break;
 		default :
 			break;
 	}
@@ -485,8 +530,10 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 }
 
 int *inthandler0c(int *esp){
-	CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
+	
 	TASK *task = task_current();
+	// CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
+	CONSOLE *cons = task->cons;
 	char excp_addr[30];
 	cons_putstr(cons, "\nINT 0C :\nStack Exception.\n");
 	sprintf(excp_addr, "EIP = %08X\n", esp[11]);
@@ -495,8 +542,10 @@ int *inthandler0c(int *esp){
 }
 
 int *inthandler0d(int *esp){
-	CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
+	
 	TASK *task = task_current();
+	// CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
+	CONSOLE *cons = task->cons;
 	char excp_addr[30];
 	cons_putstr(cons, "\nINT 0D :\nGeneral Protected Exception.\n");
 	sprintf(excp_addr, "EIP = %08X\n", esp[11]);

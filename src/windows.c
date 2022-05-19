@@ -5,7 +5,7 @@ void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act){
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 
 	BUFFER buf = (BUFFER) memman_alloc_4k(memman, xsize * ysize);
-	sheet_setbuf(sheet, buf, xsize, ysize, -1);
+	sheet_setbuf(sheet, buf, xsize, ysize, TRSPRT_OFF);
 
 	boxfill8(buf, xsize, COL8_C6C6C6, 0,         0,         xsize - 1, 0        );
 	boxfill8(buf, xsize, COL8_FFFFFF, 1,         1,         xsize - 2, 1        );
@@ -89,27 +89,18 @@ void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c)
 	return;
 }
 
-void keyWinOff(SHEET *keyWin, SHEET *sheetNotepad, int *cur_c, int cur_x){
-    changeWinTitle(keyWin, 0);
-    if(keyWin == sheetNotepad){
-        *cur_c = -1;
-        putBoxOnSheet(keyWin, cur_x, 28, 8, 16, COL8_FFFFFF);
-    }else{
-        if((keyWin->flags & 0x20) != 0){    /* 是命令行窗口 */
-            fifo32_put(&keyWin->task->fifo, 3);
-        }
+void keyWinOff(SHEET *keyRecvWin){
+    changeWinTitle(keyRecvWin, 0);
+    if((keyRecvWin->flags & 0x20) != 0){    /* 是命令行窗口 */
+        fifo32_put(&keyRecvWin->task->fifo, 3);    /* 命令行窗口光标off */
     }
     return;
 }
 
-void keyWinOn(SHEET *keyWin, SHEET *sheetNotepad, int *cur_c){
-    changeWinTitle(keyWin, 1);
-    if(keyWin == sheetNotepad)
-        *cur_c = COL8_000000;
-    else{
-        if((keyWin->flags & 0x20) != 0){    /* 是命令行窗口 */
-            fifo32_put(&keyWin->task->fifo, 2);
-        }
+void keyWinOn(SHEET *keyRecvWin){
+    changeWinTitle(keyRecvWin, 1);
+    if((keyRecvWin->flags & 0x20) != 0){    /* 是命令行窗口 */
+        fifo32_put(&keyRecvWin->task->fifo, 2);     /* 命令行窗口光标on */
     }
     return;
 }

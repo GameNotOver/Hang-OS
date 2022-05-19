@@ -3,11 +3,15 @@
 #include <stdio.h>
 #include "../include/function.h"
 
+#define cmdNum 2
+
 void HariMain(void)
 {
 	BOOTINFO *binfo = (BOOTINFO *) ADR_BOOTINFO;
 	char s[40];
 	int mx, my;
+	int new_mx, new_my;
+	int new_wx, new_wy;
 
 	/* 	fifo32 分配：
 		0x00、0xff：光标闪烁用定时器
@@ -17,17 +21,18 @@ void HariMain(void)
 		*/
 	FIFO32 fifo32, keyCmdFifo;
 	int fifo32buf[128], keyCmdBuf[32];
+	int *cmdFifoBuf[cmdNum];
 
 	MOUSE_DEC mdec; 
 
 	unsigned int memtotal;
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	SHEETCTRL *sheetCtrl;
-	SHEET *keyWin;		/* 接收键盘值的sheet */
-	SHEET *sheetBack, *sheetMouse, *sheetWin, *sheet_win_b[3];
+	SHEET *keyRecvSheet;		/* 接收键盘值的Sheet */
+	SHEET *sheetBack, *sheetMouse;
 	unsigned char *bufBack, bufMouse[256];
 
-	TIMER *timer_1, *timer_3, *timer_10, *timer_cursor;
+	TIMER *timer_1, *timer_3, *timer_10;
 
 	extern char keytable0[0x80];
 	extern char keytable1[0x80];
@@ -38,13 +43,15 @@ void HariMain(void)
 
 	TASK *task_a;
 
-	SHEET *sheetCmd;
-	TASK *taskCmd;
-	CONSOLE *cons;
+	SHEET *sheetCmds[cmdNum];
 
-	SHEET *mouseMove[2];
+	TASK *keyTask;
 
-	int i;
+	int mInShtX, mInShtY;
+	int mmx = -1, mmy = -1, mmx2 = 0;
+	SHEET *tempSheet = 0;
+
+	int i, j;
 	
 	init_gdtidt();
 	init_pic();
@@ -78,18 +85,20 @@ void HariMain(void)
 
 	*((int *) 0x0fe4) = (int) sheetCtrl;
 
+	*((int *) 0x0fe8) = memtotal;
+
 	/* 背景sheet */
 	sheetBack = sheet_alloc(sheetCtrl);
 	bufBack = (unsigned char *) memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
-	sheet_setbuf(sheetBack, bufBack, binfo->scrnx, binfo->scrny, -1); /* 没有透明色 */
+	sheet_setbuf(sheetBack, bufBack, binfo->scrnx, binfo->scrny, TRSPRT_OFF); /* 没有透明色 */
 	init_screen8(bufBack, binfo->scrnx, binfo->scrny);
 
 	*((int *) 0x0fc4) = (int) sheetBack;
 
 	/* 鼠标sheet */
 	sheetMouse = sheet_alloc(sheetCtrl);
-	sheet_setbuf(sheetMouse, bufMouse, 16, 16, COL8_TRSPAR);	/* 透明色号99 */
-	init_mouse_cursor8(bufMouse, COL8_TRSPAR);	/* 背景色号99 */
+	sheet_setbuf(sheetMouse, bufMouse, 16, 16, TRSPRT_ON);	/* 透明色号99 */
+	init_mouse_cursor8(bufMouse, TRSPRT_ON);	/* 背景色号99 */
 	
 	/* 1s定时器 */
 	timer_1 = timer_alloc();
@@ -104,92 +113,37 @@ void HariMain(void)
 	timer_init(timer_10, &fifo32, 10);
 	timer_settimer(timer_10, 10 * 100);
 
-	/* 频闪定时器 */
-	timer_cursor = timer_alloc();
-	timer_init(timer_cursor, &fifo32, 0);
-	timer_settimer(timer_cursor, 50);
-	int cursor_x = 8;
-	int cursor_c = COL8_FFFFFF;
-	
-	/* 窗口sheet */
-	sheetWin = sheet_alloc(sheetCtrl);
-	make_window8(sheetWin, 144, 52, "Count", 0);
-
-	/* Notepad sheet */
-	SHEET *sheetWinNotepad = sheet_alloc(sheetCtrl);
-	make_window8(sheetWinNotepad, 160, 20 + 30, "Notepad", 1);
-	make_textbox8(sheetWinNotepad, 8, 28, 144, 16, COL8_FFFFFF);
-
 	task_a = task_init(memman);
 	fifo32.task = task_a;
 	task_run(task_a, 1, 0);
 
-	sheetCmd = sheet_alloc(sheetCtrl);
-	make_window8(sheetCmd, CONS_WIDTH, CONS_LENGTH, "console", 0);
-	make_textbox8(sheetCmd, 8, CONS_TITLE_LEN + 8, 240, 128, COL8_000000);
-	taskCmd = task_alloc();
-	taskCmd->tss.eip = (int) &console_task;
-	taskCmd->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 12;
-	taskCmd->tss.es = 1 * 8;
-	taskCmd->tss.cs = 2 * 8;	/* GDT的2号 */
-	taskCmd->tss.ss = 1 * 8;
-	taskCmd->tss.ds = 1 * 8;
-	taskCmd->tss.fs = 1 * 8;
-	taskCmd->tss.gs = 1 * 8;
-	*((int *) (taskCmd->tss.esp + 4)) = (int) sheetCmd;
-	*((int *) (taskCmd->tss.esp + 8)) = memtotal;
-	task_run(taskCmd, 2, 2);	
+	sheetCmds[0] = open_console();
+	sheetCmds[1] = NULL;
 
 	sheet_slide(sheetBack, 0, 0);
-	sheet_slide(sheetWinNotepad, 220, 260);
-	sheet_slide(sheetWin, 108, 56);
-	sheet_slide(sheetCmd, 70, 200);
-	// sheet_slide(sheet_win_b[0], 268, 56);
-	// sheet_slide(sheet_win_b[1], 108, 116);
-	// sheet_slide(sheet_win_b[2], 268, 116);
-
+	sheet_slide(sheetCmds[0], 32, 4);
 	mx = binfo->scrnx / 2;
 	my = binfo->scrny / 2;
 	sheet_slide(sheetMouse, mx, my);
 
 	sheet_updown(sheetBack, 0);
-	// sheet_updown(sheet_win_b[0], 1);
-	// sheet_updown(sheet_win_b[1], 2);
-	// sheet_updown(sheet_win_b[2], 3);
-	sheet_updown(sheetWin, 1);
-	sheet_updown(sheetCmd, 2);
-	sheet_updown(sheetWinNotepad, 3);
-	sheet_updown(sheetMouse, 4);
+	sheet_updown(sheetCmds[0], 1);
+	sheet_updown(sheetMouse, 3);
 
-	int count = 0;
+	new_mx = -1;
+	new_my = 0;
+	new_wx = 0x7fffffff;
+	new_wy = 0;
+
 	int second_counter = 0;
-
-	SHEET *curTopSheet;
-	mouseMove[0] = sheetWinNotepad;
-	mouseMove[1] = sheetCmd;
-	int curMove = 1;
-	curTopSheet = mouseMove[curMove];
 
 	int bgColor;
 	int x, y;
-
-	int mInShtX, mInShtY;
-	int mmx = -1, mmy = -1;
-	SHEET *tempSheet = 0;
-	int j;
 	
-	keyWin = sheetWinNotepad;
-	sheetCmd->task = taskCmd;
-	sheetCmd->flags |= 0x20;	/* 有光标 */
+	keyRecvSheet = sheetCmds[0];
+	keyWinOn(keyRecvSheet);
 
 	for (;;) {
-		count++;
-
-		sprintf(s, "%010d", count);
-		x = 40; y = 28;
-		bgColor = sheetWin->buf[y * sheetWin->bxsize + x];
-		putStrOnSheet_BG(sheetWin, x, y, COL8_000000, bgColor, s);
-
 		if(fifo32_status(&keyCmdFifo) > 0 && keycmd_wait < 0){
 			keycmd_wait = fifo32_get(&keyCmdFifo);
 			wait_KBC_sendready();
@@ -199,26 +153,27 @@ void HariMain(void)
 		io_cli();
 
 		if(fifo32_status(&fifo32) == 0){
-			task_sleep(task_a);
-			io_sti();
+			/* fifo32为空，当存在搁置的绘图操作时立即执行 */
+			if(new_mx >= 0){
+				io_sti();
+				sheet_slide(sheetMouse, new_mx, new_my);
+				new_mx = -1;
+			}else if(new_wx != 0x7fffffff){
+				io_sti();
+				sheet_slide(tempSheet, new_wx, new_wy);
+				new_wx = 0x7fffffff;
+			}else{
+				task_sleep(task_a);
+				io_sti();
+			}
 		}else{
 			i = fifo32_get(&fifo32);
 			io_sti();
-			if(keyWin->flags == 0){	/* 输入窗口被关闭 */
-				keyWin = sheetCtrl->sheets[sheetCtrl->top - 1];
-				keyWinOn(keyWin, sheetWinNotepad, &cursor_c);
+			if(keyRecvSheet->flags == 0){	/* 输入窗口被关闭 */
+				keyRecvSheet = sheetCtrl->sheets[sheetCtrl->top - 1];
+				keyWinOn(keyRecvSheet);
 			}
 			switch (i){
-				case 0 : case 0xffffffff :
-					timer_init(timer_cursor, &fifo32, ~i);
-					timer_settimer(timer_cursor, 50);
-
-					if(cursor_c >= 0){
-						cursor_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
-						putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
-					}
-					
-					break;
 				case 1:
 					second_counter++;
 					sprintf(s, "COUNT: %d SEC", second_counter);
@@ -229,9 +184,9 @@ void HariMain(void)
 
 					timer_settimer(timer_1, 1 * 100);
 					break;
-				case 256 ... 511 :															/* 键盘 */										
-					sprintf(s, "%02X", (i - 256));
+				case 256 ... 511 :															/* 键盘 */		
 
+					sprintf(s, "{{%02X}}", (i - 256));
 					x = 0; y = 16;
 					bgColor = sheetBack->buf[y * sheetBack->bxsize + x];
 					putStrOnSheet_BG(sheetBack, x, y, COL8_FFFFFF, bgColor, s);
@@ -252,39 +207,22 @@ void HariMain(void)
 						   }
 					}
 					if(s[0] != 0 && key_ctrl != 1){		/* 一般字符 */
-						if(keyWin == sheetWinNotepad){		/* 发送给任务a */
-							if(cursor_x < 8 * 18){
-								s[1] = 0;
-								// if(s[0] != 'c' || key_ctrl != 1)
-								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_000000, COL8_FFFFFF, s);
-								cursor_x += 8;
-							}
-						}else{	/* 发送至命令行窗口 */
-							/* 为了不与键盘数据冲突， 在写入fifo时将键盘数值加256 */ 
-							fifo32_put(&keyWin->task->fifo, s[0] + 256);
-						}
+						/* 发送至命令行窗口 */
+						/* 为了不与键盘数据冲突， 在写入fifo时将键盘数值加256 */ 
+						fifo32_put(&keyRecvSheet->task->fifo, s[0] + 256);
 					}
 					if(i - 256 == 0x0e)	{	/* 退格键 */
-						if(keyWin == sheetWinNotepad){	/* 发送给任务a */
-							if(cursor_x > 8){
-								putStrOnSheet_BG(sheetWinNotepad, cursor_x, 20 + 8, COL8_FFFFFF, COL8_FFFFFF, " ");
-								cursor_x -= 8;
-							}
-						}else{	/* 发送至命令行窗口 */
-							fifo32_put(&keyWin->task->fifo, 8 + 256);
-						}
-						
+						/* 发送至命令行窗口 */
+						fifo32_put(&keyRecvSheet->task->fifo, 8 + 256);
 					}
 					if(i - 256 == 0x0f){	/* Tab键 */
-						keyWinOff(keyWin, sheetWinNotepad, &cursor_c, cursor_x);
-						keyWin = sheetCtrl->sheets[1];
-						sheet_updown(keyWin, sheetCtrl->top - 1);
-						keyWinOn(keyWin, sheetWinNotepad, &cursor_c);
+						keyWinOff(keyRecvSheet);
+						keyRecvSheet = sheetCtrl->sheets[1];
+						sheet_updown(keyRecvSheet, sheetCtrl->top - 1);
+						keyWinOn(keyRecvSheet);
 					}
 					if(i - 256 == 0x1c){	/* 回车键 */
-						if(keyWin != sheetWinNotepad){
-							fifo32_put(&keyWin->task->fifo, 10 + 256);
-						}
+						fifo32_put(&keyRecvSheet->task->fifo, 10 + 256);
 					}
 
 					if(i - 256 == 0x1d)
@@ -323,17 +261,24 @@ void HariMain(void)
 						wait_KBC_sendready();
 						io_out8(PORT_KEYDAT, keycmd_wait);
 					}
-					if (i - 256 == 0x2e && key_ctrl == 1 && taskCmd->tss.ss0 != 0){
-						cons = (CONSOLE *) *((int *) 0x0fec);
-						cons_putstr(cons, "\nCtrl^C\n");
-						io_cli();	/* 改变寄存器值之前先关中断 */
-						taskCmd->tss.eax = (int) &(taskCmd->tss.esp0);
-						taskCmd->tss.eip = (int) asm_end_app;
-						io_sti();
+					if (i - 256 == 0x2e && key_ctrl == 1){
+						keyTask = keyRecvSheet->task;
+						if(keyTask != NULL && keyTask->tss.ss0 != 0){
+							cons_putstr(keyTask->cons, "\nCtrl^C\n");
+							io_cli();	/* 改变寄存器值之前先关中断 */
+							keyTask->tss.eax = (int) &(keyTask->tss.esp0);
+							keyTask->tss.eip = (int) asm_end_app;
+							io_sti();
+						}
 					}
 
-					if(cursor_c >= 0){
-						putBoxOnSheet(sheetWinNotepad, cursor_x, 28, 8, 16, cursor_c);
+					if (i - 256 == 0x3c && sheetCmds[1] == NULL){
+						sheetCmds[1] = open_console();
+						sheet_slide(sheetCmds[1], 32, 4);
+						sheet_updown(sheetCmds[1], sheetCtrl->top);
+						keyWinOff(keyRecvSheet);
+						keyRecvSheet = sheetCmds[1];
+						keyWinOn(keyRecvSheet);
 					}
 					
 					break;
@@ -349,16 +294,12 @@ void HariMain(void)
 						my = max(my, 0);
 						mx = min(mx, binfo->scrnx);
 						my = min(my, binfo->scrny);
-						sprintf(s, "(%3d, %3d)", mx, my);
 
-						x = 0; y = 0;
-						bgColor = sheetBack->buf[y * sheetBack->bxsize + x];
-						putStrOnSheet_BG(sheetBack, x, y, COL8_000000, bgColor, s);
-
-						sheet_slide(sheetMouse, mx, my);
+						new_mx = mx;
+						new_my = my;
 
 						if((mdec.btn & 0x01) != 0){	/* 按下左键 */
-
+							
 							if(mmx < 0){
 								/* 如果处于普通模式 */
 								for(j = sheetCtrl->top - 1; j > 0; j--){	/* 从上往下找鼠标指向的图层 */
@@ -373,25 +314,26 @@ void HariMain(void)
 
 											sheet_updown(tempSheet, sheetCtrl->top - 1);
 
-											// if(tempSheet != sheetWinNotepad){
-												keyWinOff(keyWin, sheetWinNotepad, &cursor_c, cursor_x);
-												keyWin = tempSheet;
-												keyWinOn(keyWin, sheetWinNotepad, &cursor_c);
-											// }
+											keyWinOff(keyRecvSheet);
+											keyRecvSheet = tempSheet;
+											keyWinOn(keyRecvSheet);
 
 											if(3 <= mInShtX && mInShtX < tempSheet->bxsize - 3 
 											&& 0 <= mInShtY && mInShtY < 21){	/* 窗口标题栏点击判断 */
 												mmx = mx;
 												mmy = my;
+												mmx2 = tempSheet->vx0;
+												new_wy = tempSheet->vy0;
 											}
+
 											if(tempSheet->bxsize - 21 <= mInShtX && mInShtX < tempSheet->bxsize - 5
 											&& 5 <= mInShtY && mInShtY < 19 ){	/* 窗口标题栏关闭按钮点击判断 */
 												if((tempSheet->flags & 0x10) != 0){	/* 该窗口是否为应用窗口 */
-													cons = (CONSOLE *) *((int *) 0x0fec);
-													cons_putstr(cons, "\nBreak Mouse\n");
+													keyTask = keyRecvSheet->task;
+													cons_putstr(keyTask->cons, "\nBreak Mouse\n");
 													io_cli();
-													taskCmd->tss.eax = (int) &(taskCmd->tss.esp0);
-													taskCmd->tss.eip = (int) asm_end_app;
+													keyTask->tss.eax = (int) &(keyTask->tss.esp0);
+													keyTask->tss.eip = (int) asm_end_app;
 													io_sti();
 												}
 											}
@@ -403,12 +345,18 @@ void HariMain(void)
 								/* 如果处于窗口移动模式 */
 								mInShtX = mx - mmx;
 								mInShtY = my - mmy;
-								sheet_slide(tempSheet, tempSheet->vx0 + mInShtX, tempSheet->vy0 + mInShtY);
-								mmx = mx;
+								/* 为了发挥refreshmap函数，x坐标对4的倍数向下取整 */
+								new_wx = (mmx2 + mInShtX + 2) & ~3;
+								new_wy = new_wy + mInShtY;
+								// sheet_slide(tempSheet, (mmx2 + mInShtX + 2) & ~3, tempSheet->vy0 + mInShtY);
 								mmy = my;
 							}
-						}else{
+						}else{	/* 没有按下左键 */
 							mmx = -1;
+							if(new_wx != 0x7fffffff){
+								sheet_slide(tempSheet, new_wx, new_wy);	/* 固定图层位置 */
+								new_wx = 0x7fffffff;
+							}
 						}
 					}
 					break;

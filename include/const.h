@@ -21,7 +21,9 @@
 #define COL8_840084		13		// DARK_PURPLE	
 #define COL8_008484		14		// DARK_BLUE2		
 #define COL8_848484		15		// DARK_GRAY
-#define COL8_TRSPAR		99		// TRANSPARENT
+
+#define TRSPRT_ON		0xff	// TRANSPARENT
+#define TRSPRT_OFF		-1
 
 
 #define ADR_BOOTINFO	0x00000ff0
@@ -223,6 +225,8 @@ typedef struct TASK {
 	int level, priority;
 	FIFO32 fifo;
 	TSS32 tss;
+	struct CONSOLE *cons;
+	int ds_base;
 } TASK;
 
 typedef struct TASKLEVEL {

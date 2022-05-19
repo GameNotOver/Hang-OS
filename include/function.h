@@ -39,7 +39,7 @@ void boxfill8(unsigned char *vram, int xsize, unsigned char c, int x0, int y0, i
 void init_screen8(char *vram, int x, int y);
 void putfont8(char *vram, int xsize, int x, int y, char c, char *font);
 void putfonts8_asc(char *vram, int xsize, int x, int y, char c, unsigned char *s);
-void init_mouse_cursor8(char *mouse, char bc);
+void init_mouse_cursor8(char *mouse, int bc);
 void putblock8_8(char *vram, int vxsize, int pxsize, int pysize, int px0, int py0, char *buf, int bxsize);
 void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str);
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color);
@@ -53,8 +53,8 @@ void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act);
 void set_win_title_bar(SHEET *sheet, char *title, char act);
 void make_textbox8(SHEET *sheet, int x0, int y0, int sx, int sy, int c);
 void make_window8_buf(SHEET *sheet, char* buf, int xsize, int ysize, char *title, char act);
-void keyWinOff(SHEET *keyWin, SHEET *sheetNotepad, int *cur_c, int cur_x);
-void keyWinOn(SHEET *keyWin, SHEET *sheetNotepad, int *cur_c);
+void keyWinOff(SHEET *keyRecvWin);
+void keyWinOn(SHEET *keyRecvWin);
 void changeWinTitle(SHEET *sheet, char act);
 
 /* dsctbl.c */
@@ -139,6 +139,7 @@ void task_switch_preset(void);
 
 /* console.c */
 void console_task(SHEET *sheet, unsigned int memtotal);
+SHEET *open_console();
 void cons_newline(CONSOLE *cons);
 void cons_putchar(CONSOLE *cons, char c, char x_move);
 void cons_runcmd(char *cmdline, CONSOLE *cons, int *fat, unsigned int memtotal);
