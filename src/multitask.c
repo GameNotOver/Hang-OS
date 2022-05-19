@@ -75,7 +75,7 @@ TASK *task_alloc(void){
 }
 
 void task_run(TASK *task, int level, int priority){
-    if(level < 0)
+    if(level < 0)   /* 用于唤醒任务 */
         level = task->level;
     if(priority > 0)
         task->priority = priority;

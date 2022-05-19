@@ -4,7 +4,6 @@ unsigned char rgb2pal(int r, int g, int b, int x, int y);
 
 void HariMain(){
     int win;
-    int r, g, b;
     int x, y;
     char *buf;
     api_initmalloc();

@@ -226,7 +226,7 @@ typedef struct TASK {
 	FIFO32 fifo;
 	TSS32 tss;
 	struct CONSOLE *cons;
-	int ds_base;
+	int ds_base, cons_stack;	
 } TASK;
 
 typedef struct TASKLEVEL {

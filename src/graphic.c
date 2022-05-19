@@ -1,5 +1,6 @@
 /*图形处理相关*/
 #include "../include/function.h"
+#include <stdio.h>
 
 void init_palette(void)
 {
@@ -201,10 +202,10 @@ void putLineOnSheet(SHEET *sheet, int x0, int y0, int x1, int y1, int color){
 	return;
 }
 
-showMousePosition(int mx, int my){
+void showMousePosition(int mx, int my){
 	int bgColor;
 	char s[11];
-	SHEET *sheetBack = *((int *) 0x0fc4);
+	SHEET *sheetBack = (SHEET *) *((int *) 0x0fc4);
 	sprintf(s, "(%3d, %3d)", mx, my);
 	bgColor = sheetBack->buf[0 * sheetBack->bxsize + 0];
 	putStrOnSheet_BG(sheetBack, 0, 0, COL8_000000, bgColor, s);

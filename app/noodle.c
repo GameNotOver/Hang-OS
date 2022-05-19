@@ -8,16 +8,15 @@ void HariMain(){
 
     win = api_openwin(150, 50, "noodle");
     timer = api_alloctimer();
-    api_boxfilwin(win, 28, 27, 115, 41, COL8_FFFFFF);
-    api_putstrwin(win, 28, 27, COL8_000000, s);
     api_inittimer(timer, 128);
+
     for(;;){
 
         sprintf(s, "%02d:%02d:%02d", hour, min, sec);
         api_boxfilwin(win, 28, 27, 115, 41, COL8_FFFFFF);
-        api_putstrwin(win, 28, 27, COL8_000000, s);
+        api_putstrwin(win + 1, 28, 27, COL8_000000, s);
 
-        api_settimer(timer, 1);   /* 1秒 */
+        api_settimer(timer, 100);   /* 1秒 */
 
         if(api_getkey(1) != 128){
             break;

@@ -8,6 +8,7 @@
 void HariMain(void)
 {
 	BOOTINFO *binfo = (BOOTINFO *) ADR_BOOTINFO;
+	extern TASKCTRL *taskCtrl;
 	char s[40];
 	int mx, my;
 	int new_mx, new_my;
@@ -21,14 +22,13 @@ void HariMain(void)
 		*/
 	FIFO32 fifo32, keyCmdFifo;
 	int fifo32buf[128], keyCmdBuf[32];
-	int *cmdFifoBuf[cmdNum];
 
 	MOUSE_DEC mdec; 
 
 	unsigned int memtotal;
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	SHEETCTRL *sheetCtrl;
-	SHEET *keyRecvSheet;		/* 接收键盘值的Sheet */
+	SHEET *keyRecvWin;		/* 接收键盘值的Sheet */
 	SHEET *sheetBack, *sheetMouse;
 	unsigned char *bufBack, bufMouse[256];
 
@@ -37,13 +37,10 @@ void HariMain(void)
 	extern char keytable0[0x80];
 	extern char keytable1[0x80];
 	int key_shift = 0, key_ctrl = 0;
-	int key_to = 0;
 	int key_leds = (binfo->leds >> 4) & 7;
 	int keycmd_wait = -1;
 
 	TASK *task_a;
-
-	SHEET *sheetCmds[cmdNum];
 
 	TASK *keyTask;
 
@@ -87,6 +84,8 @@ void HariMain(void)
 
 	*((int *) 0x0fe8) = memtotal;
 
+	*((int *) 0x0fec) = (int) &fifo32;
+
 	/* 背景sheet */
 	sheetBack = sheet_alloc(sheetCtrl);
 	bufBack = (unsigned char *) memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
@@ -117,17 +116,16 @@ void HariMain(void)
 	fifo32.task = task_a;
 	task_run(task_a, 1, 0);
 
-	sheetCmds[0] = open_console();
-	sheetCmds[1] = NULL;
+	keyRecvWin = open_console();
 
 	sheet_slide(sheetBack, 0, 0);
-	sheet_slide(sheetCmds[0], 32, 4);
+	sheet_slide(keyRecvWin, 32, 4);
 	mx = binfo->scrnx / 2;
 	my = binfo->scrny / 2;
 	sheet_slide(sheetMouse, mx, my);
 
 	sheet_updown(sheetBack, 0);
-	sheet_updown(sheetCmds[0], 1);
+	sheet_updown(keyRecvWin, 1);
 	sheet_updown(sheetMouse, 3);
 
 	new_mx = -1;
@@ -140,8 +138,8 @@ void HariMain(void)
 	int bgColor;
 	int x, y;
 	
-	keyRecvSheet = sheetCmds[0];
-	keyWinOn(keyRecvSheet);
+	
+	keyWinOn(keyRecvWin);
 
 	for (;;) {
 		if(fifo32_status(&keyCmdFifo) > 0 && keycmd_wait < 0){
@@ -169,9 +167,13 @@ void HariMain(void)
 		}else{
 			i = fifo32_get(&fifo32);
 			io_sti();
-			if(keyRecvSheet->flags == 0){	/* 输入窗口被关闭 */
-				keyRecvSheet = sheetCtrl->sheets[sheetCtrl->top - 1];
-				keyWinOn(keyRecvSheet);
+			if(keyRecvWin != NULL && keyRecvWin->flags == 0){	/* 输入窗口被关闭 */
+				if(sheetCtrl->top == 1){	/* 当画面上只剩鼠标和背景时 */
+					keyRecvWin = NULL;
+				}else{
+					keyRecvWin = sheetCtrl->sheets[sheetCtrl->top - 1];
+					keyWinOn(keyRecvWin);
+				}
 			}
 			switch (i){
 				case 1:
@@ -206,24 +208,24 @@ void HariMain(void)
 							   s[0] += 0x20;	/* 将大写字母转换为小写 */
 						   }
 					}
-					if(s[0] != 0 && key_ctrl != 1){		/* 一般字符 */
+					if(s[0] != 0 && key_ctrl != 1 && keyRecvWin != NULL){		/* 一般字符、退格键、回车键 */
 						/* 发送至命令行窗口 */
 						/* 为了不与键盘数据冲突， 在写入fifo时将键盘数值加256 */ 
-						fifo32_put(&keyRecvSheet->task->fifo, s[0] + 256);
+						fifo32_put(&keyRecvWin->task->fifo, s[0] + 256);
 					}
-					if(i - 256 == 0x0e)	{	/* 退格键 */
-						/* 发送至命令行窗口 */
-						fifo32_put(&keyRecvSheet->task->fifo, 8 + 256);
+					// if(i - 256 == 0x0e && keyRecvWin != NULL)	{	/* 退格键 */
+					// 	/* 发送至命令行窗口 */
+					// 	fifo32_put(&keyRecvWin->task->fifo, 8 + 256);
+					// }
+					if(i - 256 == 0x0f && keyRecvWin != NULL){	/* Tab键 */
+						keyWinOff(keyRecvWin);
+						keyRecvWin = sheetCtrl->sheets[1];
+						sheet_updown(keyRecvWin, sheetCtrl->top - 1);
+						keyWinOn(keyRecvWin);
 					}
-					if(i - 256 == 0x0f){	/* Tab键 */
-						keyWinOff(keyRecvSheet);
-						keyRecvSheet = sheetCtrl->sheets[1];
-						sheet_updown(keyRecvSheet, sheetCtrl->top - 1);
-						keyWinOn(keyRecvSheet);
-					}
-					if(i - 256 == 0x1c){	/* 回车键 */
-						fifo32_put(&keyRecvSheet->task->fifo, 10 + 256);
-					}
+					// if(i - 256 == 0x1c){	/* 回车键 */
+					// 	fifo32_put(&keyRecvWin->task->fifo, 10 + 256);
+					// }
 
 					if(i - 256 == 0x1d)
 						key_ctrl |= 1;		/* ctrl键 ON */
@@ -261,24 +263,25 @@ void HariMain(void)
 						wait_KBC_sendready();
 						io_out8(PORT_KEYDAT, keycmd_wait);
 					}
-					if (i - 256 == 0x2e && key_ctrl == 1){
-						keyTask = keyRecvSheet->task;
+					if (i - 256 == 0x2e && key_ctrl == 1 && keyRecvWin != NULL){
+						keyTask = keyRecvWin->task;
 						if(keyTask != NULL && keyTask->tss.ss0 != 0){
 							cons_putstr(keyTask->cons, "\nCtrl^C\n");
 							io_cli();	/* 改变寄存器值之前先关中断 */
 							keyTask->tss.eax = (int) &(keyTask->tss.esp0);
 							keyTask->tss.eip = (int) asm_end_app;
 							io_sti();
+							task_run(keyTask, -1, 0);
 						}
 					}
 
-					if (i - 256 == 0x3c && sheetCmds[1] == NULL){
-						sheetCmds[1] = open_console();
-						sheet_slide(sheetCmds[1], 32, 4);
-						sheet_updown(sheetCmds[1], sheetCtrl->top);
-						keyWinOff(keyRecvSheet);
-						keyRecvSheet = sheetCmds[1];
-						keyWinOn(keyRecvSheet);
+					if (i - 256 == 0x3c){
+						if(keyRecvWin != NULL)
+							keyWinOff(keyRecvWin);
+						keyRecvWin = open_console();
+						sheet_slide(keyRecvWin, 32, 4);
+						sheet_updown(keyRecvWin, sheetCtrl->top);
+						keyWinOn(keyRecvWin);
 					}
 					
 					break;
@@ -314,9 +317,9 @@ void HariMain(void)
 
 											sheet_updown(tempSheet, sheetCtrl->top - 1);
 
-											keyWinOff(keyRecvSheet);
-											keyRecvSheet = tempSheet;
-											keyWinOn(keyRecvSheet);
+											keyWinOff(keyRecvWin);
+											keyRecvWin = tempSheet;
+											keyWinOn(keyRecvWin);
 
 											if(3 <= mInShtX && mInShtX < tempSheet->bxsize - 3 
 											&& 0 <= mInShtY && mInShtY < 21){	/* 窗口标题栏点击判断 */
@@ -328,12 +331,19 @@ void HariMain(void)
 
 											if(tempSheet->bxsize - 21 <= mInShtX && mInShtX < tempSheet->bxsize - 5
 											&& 5 <= mInShtY && mInShtY < 19 ){	/* 窗口标题栏关闭按钮点击判断 */
+
 												if((tempSheet->flags & 0x10) != 0){	/* 该窗口是否为应用窗口 */
-													keyTask = keyRecvSheet->task;
+													keyTask = tempSheet->task;
 													cons_putstr(keyTask->cons, "\nBreak Mouse\n");
 													io_cli();
 													keyTask->tss.eax = (int) &(keyTask->tss.esp0);
 													keyTask->tss.eip = (int) asm_end_app;
+													io_sti();
+													task_run(keyTask, -1, 0);
+												}else{
+													keyTask = tempSheet->task;
+													io_cli();
+													fifo32_put(&keyTask->fifo, 4);
 													io_sti();
 												}
 											}
@@ -359,6 +369,12 @@ void HariMain(void)
 							}
 						}
 					}
+					break;
+				case 768 ... 1023 :															/* 命令行窗口关闭处理 */
+					close_console(sheetCtrl->sheets0 + (i - 768));
+					break;
+				case 1024 ... 2023 :															/* 无窗口命令行关闭处理 */
+					close_constask(taskCtrl->tasks0 + (i - 1024));
 					break;
 				default:
 					break;

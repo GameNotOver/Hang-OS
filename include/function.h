@@ -139,7 +139,10 @@ void task_switch_preset(void);
 
 /* console.c */
 void console_task(SHEET *sheet, unsigned int memtotal);
+TASK *open_constask(SHEET *sheet);
 SHEET *open_console();
+void close_constask(TASK *taskCmd);
+void close_console(SHEET *sheetCmd);
 void cons_newline(CONSOLE *cons);
 void cons_putchar(CONSOLE *cons, char c, char x_move);
 void cons_runcmd(char *cmdline, CONSOLE *cons, int *fat, unsigned int memtotal);
@@ -148,6 +151,9 @@ void cmd_mem(CONSOLE *cons, unsigned int memtotal);
 void cmd_cls(CONSOLE *cons);
 void cmd_dir(CONSOLE *cons);
 void cmd_cat(CONSOLE *cons, int *fat, char *fname);
+void cmd_exit(CONSOLE *cons, int *fat);
+void cmd_start(CONSOLE *cons, char *para);
+void cmd_ncst(CONSOLE *cons, char *para);
 int cmd_app(CONSOLE *cons, int *fat, char *cmdline);
 void cons_putstr(CONSOLE *cons, char *str);
 void cons_putstr_len(CONSOLE *cons, char *str, int length);

@@ -3,8 +3,7 @@
 int rand(void);
 
 void HariMain(void){
-    int win, win2;
-    char *win2_buf;
+    int win;
     int x, y, i;
     
     api_initmalloc();
@@ -19,6 +18,7 @@ void HariMain(void){
         api_line(win + 1, 8, 26, 77, i * 9 + 26, i + 1);
         api_line(win + 1, 88, 26, i * 9 + 88, 89, 8 - i);
     }
+
     api_refreshwin(win, 6, 26, 154, 94);
 
     for(;;)
