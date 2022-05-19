@@ -21,10 +21,9 @@ void console_task(SHEET *sheet, unsigned int memtotal){
     cons.cur_y = 28;
     cons.cur_c = -1;
 
-	// *((int *) 0x0fec) = (int) &cons;
 	task->cons = &cons;
 
-	if(sheet != NULL){
+	if(cons.sheet != NULL){
 		cons.timer = timer_alloc();
 		timer_init(cons.timer, &task->fifo, 0);
 		timer_settimer(cons.timer, 50);
@@ -45,17 +44,18 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 
 			switch(i){
 				case 0: case 0xffffffff:
-					timer_init(cons.timer, &task->fifo, ~i);
-					timer_settimer(cons.timer, 50);
+					if(cons.sheet != NULL){
+						timer_init(cons.timer, &task->fifo, ~i);
+						timer_settimer(cons.timer, 50);
 
-					if(cons.cur_c >= 0)
-						cons.cur_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
-					
+						if(cons.cur_c >= 0)
+							cons.cur_c = i == 0 ? COL8_000000 : COL8_FFFFFF;
+					}
 					break;
 				case 2: case 3 :	/* 控制光标启用（2：启用，3：禁用） */
 					cons.cur_c = i == 2 ? COL8_FFFFFF : -1;
-					if(i == 3) 
-						putBoxOnSheet(sheet, cons.cur_x, cons.cur_y, 8, 16, COL8_000000);
+					if(i == 3 && cons.sheet != NULL)
+						putBoxOnSheet(cons.sheet, cons.cur_x, cons.cur_y, 8, 16, COL8_000000);
 					break;
 				case 4:		/* 点击命令行关闭按钮 */
 					cmd_exit(&cons, fat);
@@ -73,7 +73,7 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 
 						cons_runcmd(cmdline, &cons, fat, memtotal);	/* 执行命令 */
 
-						if(sheet == NULL)	/* 若是无窗口程序则程序结束时关闭命令行任务 */
+						if(cons.sheet == NULL)	/* 若是无窗口程序则程序结束时关闭命令行任务 */
 							cmd_exit(&cons, fat);
 						/* 显示提示符 */
 						cons_putchar(&cons, '>', 1);
@@ -88,8 +88,8 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 					break;
 			}	
 
-			if(cons.cur_c >= 0 && sheet != NULL)
-				putBoxOnSheet(sheet, cons.cur_x, cons.cur_y, 8, 16, cons.cur_c);
+			if(cons.cur_c >= 0 && cons.sheet != NULL)
+				putBoxOnSheet(cons.sheet, cons.cur_x, cons.cur_y, 8, 16, cons.cur_c);
 
 		}
 	}
@@ -320,7 +320,7 @@ void cmd_exit(CONSOLE *cons, int *fat){
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	TASK *task = task_current();
 	SHEETCTRL *sheetCtrl = (SHEETCTRL *) *((int *) 0x0fe4);
-	FIFO32 *fifo32 = (FIFO32 *) *((int *) 0xfec);
+	FIFO32 *fifo32 = (FIFO32 *) *((int *) 0x0fec);
 	extern TASKCTRL *taskCtrl;
 	if(cons->sheet != NULL)
 		timer_cancel(cons->timer);
@@ -459,7 +459,7 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 	TASK *task = task_current();
 	// int ds_base = *((int *) 0xfe8);
 	int ds_base = task->ds_base;
-	// CONSOLE *cons = (CONSOLE *) *((int *) 0xfec);
+	FIFO32 *sys_fifo = (FIFO32 *) *((int *) 0x0fec);
 	CONSOLE *cons = task->cons;
 	SHEETCTRL *sheetCtrl = (SHEETCTRL *) *((int *) 0x0fe4);
 	SHEET *sheet;
@@ -567,6 +567,13 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 					cons->cur_c = COL8_FFFFFF;
 				if(i == 3)	/* cursor off */
 					cons->cur_c = -1;
+				if(i == 4){	/* 只关闭命令行窗口 */
+					timer_cancel(cons->timer);
+					io_cli();
+					fifo32_put(sys_fifo, cons->sheet - sheetCtrl->sheets0 + 2024);	/* 2024 ~ 2279 */
+					cons->sheet = NULL;
+					io_sti();
+				}
 				if(i >= 256){	/* 键盘数据 */
 					
 					reg[7] = i - 256;
@@ -620,7 +627,6 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 int *inthandler0c(int *esp){
 	
 	TASK *task = task_current();
-	// CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
 	CONSOLE *cons = task->cons;
 	char excp_addr[30];
 	cons_putstr(cons, "\nINT 0C :\nStack Exception.\n");
@@ -632,7 +638,6 @@ int *inthandler0c(int *esp){
 int *inthandler0d(int *esp){
 	
 	TASK *task = task_current();
-	// CONSOLE *cons = (CONSOLE *) *((int *) 0x0fec);
 	CONSOLE *cons = task->cons;
 	char excp_addr[30];
 	cons_putstr(cons, "\nINT 0D :\nGeneral Protected Exception.\n");

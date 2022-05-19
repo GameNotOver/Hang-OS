@@ -342,6 +342,12 @@ void HariMain(void)
 													task_run(keyTask, -1, 0);
 												}else{
 													keyTask = tempSheet->task;
+													sheet_updown(tempSheet, -1);	/* 先将窗口隐藏 */
+
+													keyWinOff(keyRecvWin);
+													keyRecvWin = sheetCtrl->sheets[sheetCtrl->top - 1];
+													keyWinOn(keyRecvWin);
+
 													io_cli();
 													fifo32_put(&keyTask->fifo, 4);
 													io_sti();
@@ -373,8 +379,13 @@ void HariMain(void)
 				case 768 ... 1023 :															/* 命令行窗口关闭处理 */
 					close_console(sheetCtrl->sheets0 + (i - 768));
 					break;
-				case 1024 ... 2023 :															/* 无窗口命令行关闭处理 */
+				case 1024 ... 2023 :														/* 无窗口命令行关闭处理 */
 					close_constask(taskCtrl->tasks0 + (i - 1024));
+					break;																	
+				case 2024 ... 2279 :														/* 只关闭命令行窗口 */
+					tempSheet = sheetCtrl->sheets0 + (i - 2024);							
+					memman_free_4k(memman, (int) tempSheet->buf, 256 * 165);
+					sheet_free(tempSheet);
 					break;
 				default:
 					break;

@@ -30,7 +30,7 @@ OBJS_BOOTPACK = bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 # nas_loop.hrb nas_c.hrb nas_s.hrb c_c.hrb c_s.hrb \
 	crack.hrb bug.hrb bug2.hrb walk.hrb 
 APPS = opwin.hrb noodle.hrb beepdown.hrb color.hrb \
-	color2.hrb
+	color2.hrb crack7.hrb lines.hrb
 
 COPY_APPS		= $(foreach elem, $(APPS), copy from:$(APPPATH)$(elem) to:@: \${\n})	
 
@@ -76,11 +76,22 @@ asmhead.bin : $(SRCPATH)asmhead.nas Makefile
 %.bim: %.obj $(APPPATH)%.c $(APPPATH)a_nask.obj Makefile
 	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj $(APPPATH)a_nask.obj
 
-# %.bim: %.obj Makefile
-#	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj
 
 %.hrb: %.bim  Makefile
 	$(BIM2HRB) $*.bim $(APPPATH)$*.hrb 56k
+
+crack7.bim : crack7.obj Makefile
+	$(OBJ2BIM) @$(RULEFILE) out:crack7.bim stack:1k map:crack7.map crack7.obj
+
+crack7.hrb : crack7.bim Makefile
+	$(BIM2HRB) crack7.bim $(APPPATH)crack7.hrb 0k
+
+lines.bim : lines.obj $(APPPATH)lines.c $(APPPATH)a_nask.obj Makefile
+	$(OBJ2BIM) @$(RULEFILE) out:lines.bim stack:1k map:lines.map \
+		lines.obj $(APPPATH)a_nask.obj
+
+lines.hrb : lines.bim Makefile
+	$(BIM2HRB) lines.bim $(APPPATH)lines.hrb 48k
 
 a_nask.obj: $(APPPATH)a_nask.nas Makefile
 	$(NASK) $(APPPATH)a_nask.nas a_nask.obj a_nask.lst
