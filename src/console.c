@@ -8,6 +8,7 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	int *fat = (int *) memman_alloc_4k(memman, 4 * 2880);
     CONSOLE cons;
+	FILEHANDLE fhandle[8];
 
 	int i;
 	char cmdline[30];
@@ -22,12 +23,19 @@ void console_task(SHEET *sheet, unsigned int memtotal){
     cons.cur_c = -1;
 
 	task->cons = &cons;
+	task->cmdline = cmdline;
+
+	for(i = 0; i < 8; i++)
+		fhandle[i].buf = NULL;
+	task->fhandle = fhandle;
+	task->fat = fat;
 
 	if(cons.sheet != NULL){
 		cons.timer = timer_alloc();
 		timer_init(cons.timer, &task->fifo, 0);
 		timer_settimer(cons.timer, 50);
 	}
+
 
 	/* 显示提示符 */
 	cons_putchar(&cons, '>', 1);
@@ -210,7 +218,9 @@ void cons_putchar(CONSOLE *cons, char c, char x_move){
 void cons_runcmd(char *cmdline, CONSOLE *cons, int *fat, unsigned int memtotal){
     char cmd[10];
     char para[20];
-    cmd_getpara(cmdline, cmd, para);
+
+	cmd_getpara(cmdline, cmd, para);
+
 	if(strcmp(cmd, "mem") == 0){
 		cmd_mem(cons, memtotal);
 	}else if(strcmp(cmd, "cls") == 0){
@@ -236,14 +246,15 @@ void cons_runcmd(char *cmdline, CONSOLE *cons, int *fat, unsigned int memtotal){
 void cmd_getpara(char *cmdline, char *cmd, char *para){
     int len = strlen(cmdline);
     int i;
-    for(i = 0; i < len; i++){
-        if(cmdline[i] == ' '){
-            cmdline[i] = 0;
-            strcpy(para, cmdline + i + 1);
+	strcpy(cmd, cmdline);
+	para[0] = 0;
+    for(i = 0; cmd[i] != ' ' && i < len; i++){
+        if(cmd[i+1] == ' '){
+            cmd[i+1] = 0;
+            strcpy(para, cmd + i + 2);
             break;
         }
     }
-    strcpy(cmd, cmdline);    
 }
 
 void cmd_mem(CONSOLE *cons, unsigned int memtotal){
@@ -367,7 +378,6 @@ void cmd_ncst(CONSOLE *cons, char *para){
 int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	FILEINFO *finfo;
-	SEGMENT_DESCRIPTOR *gdt = (SEGMENT_DESCRIPTOR *) ADR_GDT;
 	SHEETCTRL *sheetCtrl = (SHEETCTRL *) *((int *) 0x0fe4);
 	SHEET *sheet;
 	char *img_file = (char *) (ADR_DISKIMG + 0x003e00);
@@ -382,10 +392,9 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	int segsiz, datsiz, esp, dathrb;
 
 	cmd_getpara(cmdline, fname, para);
-	// putStrOnSheet(cons->sheet, 0, 0, COL8_FFFFFF, fname);
-
+	
 	finfo = file_search(fname, (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
-	if(finfo == 0 && fname[strlen(fname) - 1] != 0){
+	if(finfo == NULL){
 		strcat(fname, ".hrb");
 		finfo = file_search(fname, (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
 	}
@@ -402,14 +411,14 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 			appBuf = (char *) memman_alloc_4k(memman, segsiz);
 			//*((int *) 0xfe8) = (int) appBuf;	/* 存储代码段的起始位置 */
 			task->ds_base = (int) appBuf;	/* 存储代码段的起始位置 */
-			set_segmdesc(gdt + task->selector / 8 + 1000, finfo->size - 1, (int) fileBuf, AR_CODE32_ER + 0x60);
-			set_segmdesc(gdt + task->selector / 8 + 2000, segsiz - 1, (int) appBuf, AR_DATA32_RW + 0x60);
+			set_segmdesc(task->ldt + 0, finfo->size - 1, (int) fileBuf, AR_CODE32_ER + 0x60);
+			set_segmdesc(task->ldt + 1, segsiz - 1, (int) appBuf, AR_DATA32_RW + 0x60);
 			int i;
 			for(i = 0; i < datsiz; i++){
 				appBuf[esp+i] = fileBuf[dathrb+i];
 			}
 
-			start_app(0x1b, task->selector + 1000 * 8, esp, task->selector + 2000 * 8, &(task->tss.esp0));
+			start_app(0x1b, 0 * 8 + 4, esp, 1 * 8 + 4, &(task->tss.esp0));
 			
 			for(i = 0; i < MAX_SHEETS; i++){
 				sheet = &(sheetCtrl->sheets0[i]);
@@ -417,6 +426,13 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 				if((sheet->flags & 0x11) == 0x11 && sheet->task == task){	
 					/* 找到被应用程序遗漏的窗口 */
 					sheet_free(sheet);	/* 关闭 */
+				}
+			}
+
+			for(i = 0; i < 8; i++){		/* 将未关闭的窗口关闭 */
+				if(task->fhandle[i].buf != NULL){
+					memman_free_4k(memman, (int) task->fhandle[i].buf, task->fhandle[i].size);
+					task->fhandle[i].buf = NULL;
 				}
 			}
 
@@ -463,8 +479,12 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 	CONSOLE *cons = task->cons;
 	SHEETCTRL *sheetCtrl = (SHEETCTRL *) *((int *) 0x0fe4);
 	SHEET *sheet;
-	MEMMAN *memman = (MEMMAN *) (ebx + ds_base);
-	// MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
+
+	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
+	FILEINFO *finfo;
+	FILEHANDLE *fh;
+	char *img_file = (char *) (ADR_DISKIMG + 0x003e00);
+
 	// SHEET *sb = (SHEET *) *((int *) 0x0fc4);
 	int *reg = &eax + 1;	/* eax后面的地址 */
 		/* 强行改写通过PUSHAD保存的值 */
@@ -512,17 +532,17 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 			sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
 			break;
 		case 8:		/* api_initmalloc */
-			memman_init(memman);
+			memman_init((MEMMAN *) (ebx + ds_base));
 			ecx &= 0xfffffff0;	/* 以16字节为单位 */
-			memman_free(memman, eax, ecx);
+			memman_free((MEMMAN *) (ebx + ds_base), eax, ecx);
 			break;
 		case 9:		/* api_malloc */
 			ecx = (ecx + 0x0f) & 0xfffffff0;	/* 以16字节为单位进位取整 */
-			reg[7] = memman_alloc(memman, ecx);
+			reg[7] = memman_alloc((MEMMAN *) (ebx + ds_base), ecx);
 			break;
 		case 10:	/* api_free */
 			ecx = (ecx + 0x0f) & 0xfffffff0;
-			memman_free(memman, eax, ecx);
+			memman_free((MEMMAN *) (ebx + ds_base), eax, ecx);
 			break;
 		case 11:	/* api_point */
 			sheet = (SHEET *) (ebx & 0xfffffffe);
@@ -607,6 +627,72 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 				i = io_in8(0x61);
 				io_out8(0x61, (i | 0x03) & 0x0f);
 			}
+			break;
+		case 21:
+			for(i = 0; i < 8; i++)
+				if(task->fhandle[i].buf == NULL)
+					break;
+			fh = &task->fhandle[i];
+			reg[7] = NULL;
+			if(i < 8){
+				finfo = file_search((char *) ebx + ds_base, (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
+				if(finfo != NULL){
+					reg[7] = (int) fh;
+					fh->buf = (char *) memman_alloc_4k(memman, finfo->size);
+					fh->size = finfo->size;
+					fh->pos = 0;
+					file_loadfile(finfo->clustno, finfo->size, fh->buf, task->fat, img_file);
+				}
+			}
+			break;
+		case 22:
+			fh = (FILEHANDLE *) eax;
+			memman_free_4k(memman, (int) fh->buf, fh->size);
+			fh->buf = NULL;
+			break;
+		case 23:
+			fh = (FILEHANDLE *) eax;
+			if(ecx == 0)
+				fh->pos = ebx;
+			else if(ecx == 1)
+				fh->pos += ebx;
+			else if(ecx == 2)
+				fh->pos = fh->size + ebx;
+			if(fh->pos < 0)
+				fh->pos = 0;
+			if(fh->pos > fh->size)
+				fh->pos = fh->size;
+			break;
+		case 24:
+		 	fh = (FILEHANDLE *) eax;
+			if(ecx == 0)
+				reg[7] = fh->size;
+			else if(ecx == 1)
+				reg[7] = fh->pos;
+			else if(ecx == 2)
+				reg[7] = fh->pos - fh->size;
+			break;
+		case 25:
+		 	fh = (FILEHANDLE *) eax;
+			for(i = 0; i < ecx; i++){
+				if(fh->pos == fh->size)
+					break;
+				*((char *) ebx + ds_base + i) = fh->buf[fh->pos];
+				fh->pos++;
+			}
+			reg[7] = i;
+			break;
+		case 26:
+		 	i = 0;
+			for(;;){
+				*((char *) ebx + ds_base + i) = task->cmdline[i];
+				if(task->cmdline[i] == 0)
+					break;
+				if(i > ecx)
+					break;
+				i++;
+			}
+			reg[7] = i;
 			break;
 		case 0xff:	/* api_openwin_buf */
 			sheet = sheet_alloc(sheetCtrl);

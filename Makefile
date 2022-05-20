@@ -15,7 +15,7 @@ BIN2OBJ  = $(TOOLPATH)bin2obj.exe
 BIM2HRB  = $(TOOLPATH)bim2hrb.exe
 RULEFILE = $(TOOLPATH)haribote/haribote.rul
 EDIMG    = $(TOOLPATH)edimg.exe
-IMGTOL   = $(TOOLPATH)imgtol.com
+GOLIB	 = $(TOOLPATH)golib00.exe
 COPY     = copy
 DEL      = del
 
@@ -23,33 +23,22 @@ SRCPATH  = ./src/
 RESPATH  = ./resource/
 HEDPATH  = ./include/
 APPPATH	 = ./app/
+APIPATH  = ./api/
 
 OBJS_BOOTPACK = bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
 	data.obj timer.obj multitask.obj console.obj file.obj windows.obj
-# nas_loop.hrb nas_c.hrb nas_s.hrb c_c.hrb c_s.hrb \
-	crack.hrb bug.hrb bug2.hrb walk.hrb 
-APPS = opwin.hrb noodle.hrb beepdown.hrb color.hrb \
-	color2.hrb crack7.hrb lines.hrb
 
-COPY_APPS		= $(foreach elem, $(APPS), copy from:$(APPPATH)$(elem) to:@: \${\n})	
+APPS = beepdown c_c c_s color color2 opwin sec walk prime type
 
-
+COPY_APPS		= $(foreach app, $(APPS), copy from:$(APPPATH)$(app)/$(app).hrb to:@: \${\n})	
 
 # 默认动作
 
 default :
 	$(MAKE) img
 
-# 文件生成规则
-
-ipl10.bin : $(SRCPATH)ipl10.nas Makefile
-	$(NASK) $(SRCPATH)ipl10.nas ipl10.bin ipl10.lst
-
-asmhead.bin : $(SRCPATH)asmhead.nas Makefile
-	$(NASK) $(SRCPATH)asmhead.nas asmhead.bin asmhead.lst
-
-# 生成 bootpack graphic dsctbl int fifo 的一般规则
+# 一般规则
 
 %.gas : $(SRCPATH)%.c Makefile
 	$(CC1) -o $*.gas $(SRCPATH)$*.c
@@ -60,46 +49,15 @@ asmhead.bin : $(SRCPATH)asmhead.nas Makefile
 %.obj : %.nas Makefile
 	$(NASK) $*.nas $*.obj $*.lst
 
-# nas -> hrb
-# %.hrb : $(APPPATH)%.bim Makefile
-# 	$(NASK) $(APPPATH)$*.nas $(APPPATH)$*.hrb
-
-# c -> hrb
-
-%.gas : $(APPPATH)%.c Makefile
-	$(CC1) -o $*.gas $(APPPATH)$*.c
-%.nas : %.gas $(APPPATH)%.c Makefile
-	$(GAS2NASK) $*.gas $*.nas
-%.obj : $(APPPATH)%.nas Makefile
-	$(NASK) $(APPPATH)$*.nas $*.obj $*.lst
-
-%.bim: %.obj $(APPPATH)%.c $(APPPATH)a_nask.obj Makefile
-	$(OBJ2BIM) @$(RULEFILE) out:$*.bim stack:1k map:$*.map $*.obj $(APPPATH)a_nask.obj
-
-
-%.hrb: %.bim  Makefile
-	$(BIM2HRB) $*.bim $(APPPATH)$*.hrb 56k
-
-crack7.bim : crack7.obj Makefile
-	$(OBJ2BIM) @$(RULEFILE) out:crack7.bim stack:1k map:crack7.map crack7.obj
-
-crack7.hrb : crack7.bim Makefile
-	$(BIM2HRB) crack7.bim $(APPPATH)crack7.hrb 0k
-
-lines.bim : lines.obj $(APPPATH)lines.c $(APPPATH)a_nask.obj Makefile
-	$(OBJ2BIM) @$(RULEFILE) out:lines.bim stack:1k map:lines.map \
-		lines.obj $(APPPATH)a_nask.obj
-
-lines.hrb : lines.bim Makefile
-	$(BIM2HRB) lines.bim $(APPPATH)lines.hrb 48k
-
-a_nask.obj: $(APPPATH)a_nask.nas Makefile
-	$(NASK) $(APPPATH)a_nask.nas a_nask.obj a_nask.lst
-
-# hello3.map: hello3.obj $(APPPATH)hello3.c $(APPPATH)a_nask.obj Makefile
-# 	$(OBJ2BIM) @$(RULEFILE) out:hello3.bim map:hello3.map hello3.obj $(APPPATH)a_nask.obj
-
 # os app
+# 文件生成规则
+
+ipl10.bin : $(SRCPATH)ipl10.nas Makefile
+	$(NASK) $(SRCPATH)ipl10.nas ipl10.bin ipl10.lst
+
+asmhead.bin : $(SRCPATH)asmhead.nas Makefile
+	$(NASK) $(SRCPATH)asmhead.nas asmhead.bin asmhead.lst
+
 naskfunc.obj : $(SRCPATH)naskfunc.nas Makefile
 	$(NASK) $(SRCPATH)naskfunc.nas naskfunc.obj naskfunc.lst
 
@@ -120,34 +78,41 @@ bootpack.hrb : bootpack.bim Makefile
 haribote.sys : asmhead.bin bootpack.hrb Makefile
 	copy /B asmhead.bin+bootpack.hrb haribote.sys
 
-haribote.img : ipl10.bin haribote.sys $(foreach elem, $(APPS), $(APPPATH)$(elem))  Makefile
+haribote.img : ipl10.bin haribote.sys $(foreach app, $(APPS), $(APPPATH)$(app))  Makefile
 	$(EDIMG)   imgin:../z_tools/fdimg0at.tek \
-		wbinimg src:ipl10.bin len:512 from:0 to:0 \
-		copy from:haribote.sys to:@: \
-		copy from:$(SRCPATH)ipl10.nas to:@: \
-		copy from:make.bat to:@: \
-		$(COPY_APPS) imgout:haribote.img
+wbinimg src:ipl10.bin len:512 from:0 to:0 \
+copy from:haribote.sys to:@: \
+copy from:$(SRCPATH)ipl10.nas to:@: \
+copy from:make.bat to:@: \
+$(COPY_APPS) imgout:haribote.img
 
 # 命令
 
 img :
 	$(MAKE) haribote.img
 
-# $(MAKE) myapp
-
 run :
-	$(MAKE) myapp
+	$(MAKE) apps
 	$(MAKE) img
 	$(COPY) haribote.img ..\z_tools\qemu\fdimage0.bin
 	$(MAKE) -C ../z_tools/qemu
 
-install :
-	$(MAKE) img
-	$(IMGTOL) w a: haribote.img
+# IMGTOL   = $(TOOLPATH)imgtol.com
+# install :
+# 	$(MAKE) img
+# 	$(IMGTOL) w a: haribote.img
+apps :
+	$(foreach app, $(APPS), $(MAKE) -C $(APPPATH)$(app) $(\n))
 
-myapp	:
-	$(MAKE) $(APPS)
-	
+appclean :
+	$(foreach app, $(APPS), $(MAKE) -C $(APPPATH)$(app) clean $(\n))
+
+apis :
+	$(MAKE)	-C $(APIPATH)
+
+apiclean :
+	$(MAKE)	-C $(APIPATH) clean
+
 clean :
 	-$(DEL) *.bin
 	-$(DEL) *.lst
@@ -156,15 +121,6 @@ clean :
 	-$(DEL) bootpack.bim
 	-$(DEL) bootpack.hrb
 	-$(DEL) haribote.sys
-	-$(DEL) *.map
-	-$(DEL) *.nas
-	-$(DEL) *.bim
-	-$(DEL) *.gas
-	$(MAKE) -C $(APPPATH) clean
-
-appclean:
-	-$(DEL) $(APPPATH)a_nask.lst
-	-$(DEL) $(APPPATH)a_nask.lst
 
 src_only :
 	$(MAKE) clean

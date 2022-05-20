@@ -53,7 +53,9 @@
 #define AR_DATA32_RW	0x4092
 #define AR_CODE32_ER	0x409a
 #define AR_INTGATE32	0x008e
+#define AR_LDT			0x0082
 #define AR_TSS32		0x0089
+#define AR_INTGATE32	0x008e
 
 /* int.c bootpack.c*/
 #define PORT_KEYDAT		0x0060
@@ -170,7 +172,7 @@ typedef struct FREEINFO {
 
 typedef struct MEMMAN {
 	int frees, maxfrees, lostsize, losts;
-	FREEINFO free[MEMMAN_FREES];
+	struct FREEINFO free[MEMMAN_FREES];
 } MEMMAN;	/* 16 + 8 * 4090 = 32736B ~ 32KB */
 
 typedef struct SHEET {
@@ -189,15 +191,15 @@ typedef struct SHEETCTRL {
 	unsigned char *map;
 	int xsize, ysize;
 	int top;			/* 最上面图层的高度 */
-	SHEET *sheets[MAX_SHEETS];
-	SHEET sheets0[MAX_SHEETS];
+	struct SHEET *sheets[MAX_SHEETS];
+	struct SHEET sheets0[MAX_SHEETS];
 } SHEETCTRL;	/* 16 + 4 * 256 +  32 * 256 = 9232B*/
 
 typedef struct TIMER {
 	unsigned int timeout;
 	unsigned int flags;
 	unsigned int flags_basic;
-	FIFO32 *fifo;
+	struct FIFO32 *fifo;
 	int data;
 	struct TIMER *next;
 } TIMER;
@@ -206,8 +208,8 @@ typedef struct TIMER {
 typedef struct TIMER_CRTL {
 	unsigned int count;
 	unsigned int next_timeout;
-	TIMER *head;
-	TIMER timers[MAX_TIMER];
+	struct TIMER *head;
+	struct TIMER timers[MAX_TIMER];
 } TIMER_CRTL;
 
 /* task struct segment */
@@ -223,30 +225,40 @@ typedef struct TASK {
 	int selector;		/* GDT的编号 */
 	int flags;	
 	int level, priority;
-	FIFO32 fifo;
-	TSS32 tss;
+	struct FIFO32 fifo;
+	struct TSS32 tss;
+	struct SEGMENT_DESCRIPTOR ldt[2];
 	struct CONSOLE *cons;
-	int ds_base, cons_stack;	
+	int ds_base, cons_stack;
+	struct FILEHANDLE *fhandle;
+	int *fat;
+	char *cmdline;
 } TASK;
 
 typedef struct TASKLEVEL {
 	int running;
 	int current;
-	TASK *tasks[MAX_TASKS_LV];
+	struct TASK *tasks[MAX_TASKS_LV];
 } TASKLEVEL;
 
 typedef struct TASKCTRL {
 	int cur_lv;			/* 现在活动中的level */
 	char lv_change;		/* 在下次任务切换时是否需要改变level */
-	TASKLEVEL level[MAX_TASKLEVELS];
+	struct TASKLEVEL level[MAX_TASKLEVELS];
 	TASK tasks0[MAX_TASKS];
 } TASKCTRL;
 
 typedef struct CONSOLE {
-	SHEET *sheet;
+	struct SHEET *sheet;
 	int cur_x, cur_y, cur_c;
-	TIMER *timer;
+	struct TIMER *timer;
 } CONSOLE;
+
+typedef struct FILEHANDLE {
+	char *buf;
+	int size;
+	int pos;
+} FILEHANDLE;
 
 
 #endif

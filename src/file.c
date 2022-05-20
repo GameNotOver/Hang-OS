@@ -33,6 +33,7 @@ void file_loadfile(int clustno, int size, char *buf, int *fat, char *img){
 FILEINFO  *file_search(char *fname, FILEINFO *finfo, int max){
 	int x, y;
 	char fileName[12];
+
     for(x = 0; x < 12; x++)
         fileName[x] = ' ';
     fileName[11] = 0;
@@ -46,7 +47,7 @@ FILEINFO  *file_search(char *fname, FILEINFO *finfo, int max){
 			y++;
 		}
 	}
-	if(x == 11)
+	if(x == 13)	/* 文件名加后缀不得超过12 最长为8+1+3=12，如ABCDEFGH.HRB */
 		return NULL;
 	/* 寻找文件 */
 	for(x = 0; x < max; ){

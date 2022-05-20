@@ -104,6 +104,7 @@ int min(int a, int b);
 /* string.c */
 int stringlength(char *str);
 int strcmp_len(char *str_1, char *str_2, int len);
+void stringcat(char *dist, char *src);
 
 /* sheet.c */
 SHEETCTRL *sheetctrl_init(MEMMAN *man, unsigned char *vram, int xsize, int ysize);

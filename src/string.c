@@ -18,6 +18,15 @@ int strcmp_len(char *str_1, char *str_2, int len){
     return 0;
 }
 
+void stringcat(char *dist, char *src){
+    int i = 0, j;
+    while(dist[i] != 0)
+        i++;
+    for(j = 0; src[j] != 0; j++, i++)
+        dist[i] = src[j] ;
+    dist[i] = 0;
+}
+
 // void strcpy_len(char *dist, char *src, int len){
 //     int i;
 //     while(i < len){

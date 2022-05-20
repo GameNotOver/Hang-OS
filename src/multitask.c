@@ -13,7 +13,9 @@ TASK *task_init(MEMMAN *man){   /* 调用该函数以后，所有程序的运行
     for(i = 0; i < MAX_TASKLEVELS; i++){
         taskCtrl->tasks0[i].flags = TASK_FREE;
         taskCtrl->tasks0[i].selector = (TASK_GDT0 + i) * 8;
+        taskCtrl->tasks0[i].tss.ldtr = (TASK_GDT0 + MAX_TASKS + i) * 8;
         set_segmdesc(gdt + (TASK_GDT0 + i), 103, (int) &taskCtrl->tasks0[i].tss, AR_TSS32);     /* sizeof(tss) = 104 B, 0~103 */
+        set_segmdesc(gdt + TASK_GDT0 + MAX_TASKS + i, 15, (int) taskCtrl->tasks0[i].ldt, AR_LDT);   /* 设置LDT */
     }
     for(i = 0; i < MAX_TASKLEVELS; i++){
         taskCtrl->level[i].running = 0;
@@ -65,7 +67,7 @@ TASK *task_alloc(void){
             task->tss.ds = 0;
             task->tss.fs = 0;
             task->tss.gs = 0;
-            task->tss.ldtr = 0;
+            // task->tss.ldtr = 0;
             task->tss.iomap = 0x40000000;
             task->tss.ss0 = 0;
             return task;
