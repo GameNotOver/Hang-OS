@@ -1,6 +1,6 @@
 /*图形处理相关*/
-#include "../include/function.h"
 #include <stdio.h>
+#include "../include/function.h"
 
 void init_palette(void)
 {
@@ -94,11 +94,68 @@ void putfont8(char *vram, int xsize, int x, int y, char c, char *font)
 
 void putfonts8_asc(char *vram, int xsize, int x, int y, char c, unsigned char *s)
 {
+
 	extern char hankaku[4096];
-	for (; *s != 0x00; s++) {
-		putfont8(vram, xsize, x, y, c, hankaku + *s * 16);
-		x += 8;
+	TASK *task = task_current();
+	char *nihong = (char *) *((int *) 0x0fc8);
+	char *font;
+	int k, t;
+
+	if(task->langmode == 0){
+		for (; *s != 0x00; s++) {
+			putfont8(vram, xsize, x, y, c, hankaku + *s * 16);
+			x += 8;
+		}
 	}
+	if(task->langmode == 1){
+		for (; *s != 0x00; s++) {
+			if(task->langbyte1 == 0){
+				if((0x81 <= *s && *s <= 0x9f) || (0xe0 <= *s && *s <= 0xfc))
+					task->langbyte1 = *s;
+				else
+					putfont8(vram, xsize, x, y, c, nihong + *s * 16);
+			}else{
+				if(0x81 <= task->langbyte1 && task->langbyte1 <= 0x9f)
+					k = (task->langbyte1 - 0x81) * 2;
+				else
+					k = (task->langbyte1 - 0xe0) * 2 + 62;
+
+				if(0x40 <= *s && *s <= 0x7e){
+					t = *s - 0x40;
+				}else if(0x80 <= *s && *s <= 0x9e){
+					t = *s - 0x80 + 63;
+				}else{
+					t = *s - 0x9f;
+					k++;
+				}
+				task->langbyte1 = 0;
+				font = nihong + 256 * 16 + (k * 94 + t) * 32;
+				putfont8(vram, xsize, x - 8, y, c, font);		/* 左半部分 */
+				putfont8(vram, xsize, x    , y, c, font + 16);	/* 右半部分 */
+			}
+			x += 8;
+		}
+	}
+	if(task->langmode == 2){
+		for(; *s != 0x00; s++){
+			if(task->langbyte1 == 0){
+				if(0x81 <= *s && *s <= 0xfe){
+					task->langbyte1 = *s;
+				}else{
+					putfont8(vram, xsize, x, y, c, nihong + *s * 16);
+				}
+			}else{
+				k = task->langbyte1 - 0xa1;
+				t = *s - 0xa1;
+				task->langbyte1 = 0;
+				font = nihong + 256 * 16 + (k * 94 + t) * 32;
+				putfont8(vram, xsize, x - 8, y, c, font);
+				putfont8(vram, xsize, x, y, c, font + 16);
+			}
+			x += 8;
+		}
+	}
+	
 	return;
 }
 
@@ -147,9 +204,31 @@ void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str){
 void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, char *str){
 	int strLen = stringlength(str);
 	int bgColor = bg_color;
+	TASK *task = task_current();
 	boxfill8(sheet->buf, sheet->bxsize, bgColor, x, y, x + strLen * 8 - 1, y + 16 - 1);
-	putfonts8_asc(sheet->buf, sheet->bxsize, x, y, font_color, str);
-	sheet_refresh(sheet, x, y, x + strLen * 8, y + 16);
+	if(task->langmode != 0 && task->langbyte1 != 0){
+		putfonts8_asc(sheet->buf, sheet->bxsize, x, y, font_color, str);
+		sheet_refresh(sheet, x-8, y, x + strLen * 8, y + 16);
+	}else{
+		putfonts8_asc(sheet->buf, sheet->bxsize, x, y, font_color, str);
+		sheet_refresh(sheet, x, y, x + strLen * 8, y + 16);
+	}	
+	
+	
+}
+
+void putfonts8_asc_sht(struct SHEET *sht, int x, int y, int c, int b, char *s, int l)
+{
+	TASK *task = task_current();
+	boxfill8(sht->buf, sht->bxsize, b, x, y, x + l * 8 - 1, y + 15);
+	if(task->langmode != 0 && task->langbyte1 != 0){
+		putfonts8_asc(sht->buf, sht->bxsize, x, y, c, s);
+		sheet_refresh(sht, x-8, y, x + l * 8, y + 16);
+	}else{
+		putfonts8_asc(sht->buf, sht->bxsize, x, y, c, s);
+		sheet_refresh(sht, x, y, x + l * 8, y + 16);
+	}
+	return;
 }
 
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color){

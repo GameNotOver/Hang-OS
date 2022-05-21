@@ -29,7 +29,7 @@ OBJS_BOOTPACK = bootpack.obj naskfunc.obj hankaku.obj graphic.obj dsctbl.obj \
 	int.obj fifo.obj keyboard.obj mouse.obj memory.obj math.obj sheet.obj string.obj \
 	data.obj timer.obj multitask.obj console.obj file.obj windows.obj
 
-APPS = beepdown c_c c_s color color2 opwin sec walk prime type
+APPS = beepdown c_c c_s color color2 opwin sec walk prime type iroha chklang bball invader
 
 COPY_APPS		= $(foreach app, $(APPS), copy from:$(APPPATH)$(app)/$(app).hrb to:@: \${\n})	
 
@@ -83,8 +83,9 @@ haribote.img : ipl10.bin haribote.sys $(foreach app, $(APPS), $(APPPATH)$(app)) 
 wbinimg src:ipl10.bin len:512 from:0 to:0 \
 copy from:haribote.sys to:@: \
 copy from:$(SRCPATH)ipl10.nas to:@: \
-copy from:make.bat to:@: \
-$(COPY_APPS) imgout:haribote.img
+copy from:euc.txt to:@: \
+$(COPY_APPS) copy from:./resource/nihong.fnt to:@: \
+imgout:haribote.img
 
 # 命令
 

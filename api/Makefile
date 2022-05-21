@@ -8,7 +8,7 @@ DEL      = del
 
 SRCPATH	 = ./src/
 
-LINKOBJS = alloca cmdline file graph memory os string timer window
+LINKOBJS = alloca cmdline file graph memory os string timer window lang
 
 NEED 	= $(foreach obj, $(LINKOBJS), $(obj).obj )	
 

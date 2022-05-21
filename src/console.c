@@ -10,6 +10,8 @@ void console_task(SHEET *sheet, unsigned int memtotal){
     CONSOLE cons;
 	FILEHANDLE fhandle[8];
 
+	char *nihong = (char *) *((int *) 0x0fc8);
+
 	int i;
 	char cmdline[30];
 
@@ -39,6 +41,13 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 
 	/* 显示提示符 */
 	cons_putchar(&cons, '>', 1);
+
+	if(nihong[4096] != 0xff){
+		task->langmode = 1;
+	}else{
+		task->langmode = 0;
+	}
+	task->langbyte1 = 0;
 
 	while(1){	
 		io_cli();
@@ -163,6 +172,7 @@ TASK *open_constask(SHEET *sheet){
 void cons_newline(CONSOLE *cons){
     int x, y;
     SHEET *sheet = cons->sheet;
+	TASK *task = task_current();
     int cur_x_start = 8;
     int cur_x_end = cur_x_start + 240;
     int cur_y_start = CONS_TITLE_LEN + 8;
@@ -183,6 +193,9 @@ void cons_newline(CONSOLE *cons){
 		}
     }
     cons->cur_x = 8;
+	if(task->langmode == 1 && task->langbyte1 != 0)
+		cons->cur_x += 8;
+	return;
 }
 
 void cons_putchar(CONSOLE *cons, char c, char x_move){
@@ -207,6 +220,7 @@ void cons_putchar(CONSOLE *cons, char c, char x_move){
         default :   /* 一般字符 */
 			if(cons->sheet != NULL)
             	putStrOnSheet_BG(cons->sheet, cons->cur_x, cons->cur_y, COL8_FFFFFF, COL8_000000, s);
+				// putfonts8_asc_sht(cons->sheet, cons->cur_x, cons->cur_y, COL8_FFFFFF, COL8_000000, s, 1);
             if(x_move != 0){  /* move为0时光标不后移 */
                 cons->cur_x += 8;
                 if(cons->cur_x - 8 == CONS_WIDTH - 16)
@@ -235,6 +249,8 @@ void cons_runcmd(char *cmdline, CONSOLE *cons, int *fat, unsigned int memtotal){
 		cmd_start(cons, para);
 	}else if(strcmp(cmd, "ncst") == 0){
 		cmd_ncst(cons, para);
+	}else if(strcmp(cmd, "langmode") == 0){
+		cmd_langmode(cons, para);
 	}else if(cmd[0] != 0){
 		if(cmd_app(cons, fat, cmdline) == 0){
 			cons_putstr(cons, "Bad command!\n\n");
@@ -375,6 +391,18 @@ void cmd_ncst(CONSOLE *cons, char *para){
 	return;
 }
 
+void cmd_langmode(CONSOLE *cons, char *para){
+	TASK *task = task_current();
+	unsigned char mode = para[0] - '0';
+	if(mode <= 2){
+		task->langmode = mode;
+	}else{
+		cons_putstr(cons, "mode number error\n");
+	}
+	cons_newline(cons);
+	return;
+}
+
 int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 	MEMMAN *memman = (MEMMAN *) MEMMAN_ADDR;
 	FILEINFO *finfo;
@@ -438,6 +466,7 @@ int cmd_app(CONSOLE *cons, int *fat, char *cmdline){
 
 			timer_cancelall(&task->fifo);
 			memman_free_4k(memman, (int) appBuf, segsiz);
+			task->langbyte1 = 0;
 		}else{
 			cons_putstr(cons, ".hrb file format error!\n");
 		}
@@ -526,10 +555,11 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 				sheet_refresh(sheet, esi, edi, esi + len * 8, edi + 16);
 			break;
 		case 7:		/* api_boxfilwin */
-			sheet = (SHEET *) ebx;
+			sheet = (SHEET *) (ebx & 0xfffffffe);
 			len = strlen((char *) ebp + ds_base);
 			boxfill8(sheet->buf, sheet->bxsize, ebp, eax, ecx, esi, edi);
-			sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
+			if((ebx & 1) == 0)
+				sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
 			break;
 		case 8:		/* api_initmalloc */
 			memman_init((MEMMAN *) (ebx + ds_base));
@@ -557,8 +587,19 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 		case 13:	/* api_line */
 			sheet = (SHEET *) (ebx & 0xfffffffe);
 			putLineOnSheet(sheet, eax, ecx, esi, edi, ebp);
-			if((ebx & 1) == 0)
-				sheet_refresh(sheet, esi, edi, esi + 1, edi + 1);
+			if((ebx & 1) == 0){
+				if(eax > esi){
+					i = eax;
+					eax = esi;
+					esi = i;
+				}
+				if(ecx > edi){
+					i = ecx;
+					ecx = edi;
+					edi = i;
+				}
+				sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
+			}
 			break;
 		case 14:	/* api_closewin */
 			sheet = (SHEET *) ebx;
@@ -693,6 +734,9 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 				i++;
 			}
 			reg[7] = i;
+			break;
+		case 27:
+			reg[7] = task->langmode;
 			break;
 		case 0xff:	/* api_openwin_buf */
 			sheet = sheet_alloc(sheetCtrl);

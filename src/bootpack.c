@@ -34,8 +34,10 @@ void HariMain(void)
 
 	TIMER *timer_1, *timer_3, *timer_10;
 
+	extern char hankaku[4096];
 	extern char keytable0[0x80];
 	extern char keytable1[0x80];
+
 	int key_shift = 0, key_ctrl = 0;
 	int key_leds = (binfo->leds >> 4) & 7;
 	int keycmd_wait = -1;
@@ -47,6 +49,10 @@ void HariMain(void)
 	int mInShtX, mInShtY;
 	int mmx = -1, mmy = -1, mmx2 = 0;
 	SHEET *tempSheet = 0;
+
+	unsigned char *nihong;
+	int *fat;
+	FILEINFO *finfo;
 
 	int i, j;
 	
@@ -115,6 +121,7 @@ void HariMain(void)
 	task_a = task_init(memman);
 	fifo32.task = task_a;
 	task_run(task_a, 1, 0);
+	task_a->langmode = 0;
 
 	keyRecvWin = open_console();
 
@@ -137,9 +144,26 @@ void HariMain(void)
 
 	int bgColor;
 	int x, y;
-	
-	
+
 	keyWinOn(keyRecvWin);
+
+	/* 加载字体 */
+	nihong = (unsigned char *) memman_alloc_4k(memman, 16 * 256 + 32 * 94 * 47);
+	fat = (int *) memman_alloc_4k(memman, 4 * 2880);
+	file_readfat(fat, (unsigned char *) (ADR_DISKIMG + 0x000200));
+	finfo = file_search("nihong.fnt", (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
+	if(finfo != NULL){
+		file_loadfile(finfo->clustno, finfo->size, nihong, fat, (char *) (ADR_DISKIMG + 0x003e00));
+	}else{
+		for(i = 0; i < 16 * 256; i++)	/* 没有字库，半角部分直接复制英文字库 */
+			nihong[i] = hankaku[i];
+		for(i = 16 * 256; i < 16 * 256 + 32 * 94 * 47; i++)	/* 没有字库，全角部分0xff填充 */
+			nihong[i] = 0xff;
+	}
+
+	*((int *) 0x0fc8) = (int) nihong;
+	memman_free_4k(memman, (int) fat, 4 * 2880);
+	
 
 	for (;;) {
 		if(fifo32_status(&keyCmdFifo) > 0 && keycmd_wait < 0){

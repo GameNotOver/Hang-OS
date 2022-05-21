@@ -233,6 +233,7 @@ typedef struct TASK {
 	struct FILEHANDLE *fhandle;
 	int *fat;
 	char *cmdline;
+	unsigned char langmode, langbyte1;
 } TASK;
 
 typedef struct TASKLEVEL {

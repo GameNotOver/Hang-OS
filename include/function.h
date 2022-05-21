@@ -45,8 +45,7 @@ void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str);
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color);
 void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, char *str);
 void putLineOnSheet(SHEET *sheet, int x0, int y0, int x1, int y1, int color);
-
-
+void putfonts8_asc_sht(struct SHEET *sht, int x, int y, int c, int b, char *s, int l);
 
 /* windows.c */
 void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act);
@@ -155,6 +154,7 @@ void cmd_cat(CONSOLE *cons, int *fat, char *fname);
 void cmd_exit(CONSOLE *cons, int *fat);
 void cmd_start(CONSOLE *cons, char *para);
 void cmd_ncst(CONSOLE *cons, char *para);
+void cmd_langmode(CONSOLE *cons, char *para);
 int cmd_app(CONSOLE *cons, int *fat, char *cmdline);
 void cons_putstr(CONSOLE *cons, char *str);
 void cons_putstr_len(CONSOLE *cons, char *str, int length);
