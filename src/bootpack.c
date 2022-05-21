@@ -50,7 +50,7 @@ void HariMain(void)
 	int mmx = -1, mmy = -1, mmx2 = 0;
 	SHEET *tempSheet = 0;
 
-	unsigned char *nihong;
+	unsigned char *songti;
 	int *fat;
 	FILEINFO *finfo;
 
@@ -91,6 +91,7 @@ void HariMain(void)
 	*((int *) 0x0fe8) = memtotal;
 
 	*((int *) 0x0fec) = (int) &fifo32;
+
 
 	/* 背景sheet */
 	sheetBack = sheet_alloc(sheetCtrl);
@@ -148,20 +149,21 @@ void HariMain(void)
 	keyWinOn(keyRecvWin);
 
 	/* 加载字体 */
-	nihong = (unsigned char *) memman_alloc_4k(memman, 16 * 256 + 32 * 94 * 47);
+	// nihong = (unsigned char *) memman_alloc_4k(memman, 16 * 256 + 32 * 94 * 47);
+	songti = (unsigned char *) memman_alloc_4k(memman, 161 * 1024);
 	fat = (int *) memman_alloc_4k(memman, 4 * 2880);
 	file_readfat(fat, (unsigned char *) (ADR_DISKIMG + 0x000200));
-	finfo = file_search("nihong.fnt", (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
+	finfo = file_search("songti.fnt", (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
 	if(finfo != NULL){
-		file_loadfile(finfo->clustno, finfo->size, nihong, fat, (char *) (ADR_DISKIMG + 0x003e00));
+		file_loadfile(finfo->clustno, finfo->size, songti, fat, (char *) (ADR_DISKIMG + 0x003e00));
 	}else{
 		for(i = 0; i < 16 * 256; i++)	/* 没有字库，半角部分直接复制英文字库 */
-			nihong[i] = hankaku[i];
+			songti[i] = hankaku[i];
 		for(i = 16 * 256; i < 16 * 256 + 32 * 94 * 47; i++)	/* 没有字库，全角部分0xff填充 */
-			nihong[i] = 0xff;
+			songti[i] = 0xff;
 	}
 
-	*((int *) 0x0fc8) = (int) nihong;
+	*((int *) 0x0fc8) = (int) songti;
 	memman_free_4k(memman, (int) fat, 4 * 2880);
 	
 

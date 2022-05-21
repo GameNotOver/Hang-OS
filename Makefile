@@ -82,10 +82,9 @@ haribote.img : ipl10.bin haribote.sys $(foreach app, $(APPS), $(APPPATH)$(app)) 
 	$(EDIMG)   imgin:../z_tools/fdimg0at.tek \
 wbinimg src:ipl10.bin len:512 from:0 to:0 \
 copy from:haribote.sys to:@: \
-copy from:$(SRCPATH)ipl10.nas to:@: \
-copy from:euc.txt to:@: \
-$(COPY_APPS) copy from:./resource/nihong.fnt to:@: \
-imgout:haribote.img
+copy from:$(RESPATH)gb2312.txt to:@: \
+copy from:$(RESPATH)songti.fnt to:@: \
+$(COPY_APPS) imgout:haribote.img
 
 # 命令
 
@@ -98,10 +97,6 @@ run :
 	$(COPY) haribote.img ..\z_tools\qemu\fdimage0.bin
 	$(MAKE) -C ../z_tools/qemu
 
-# IMGTOL   = $(TOOLPATH)imgtol.com
-# install :
-# 	$(MAKE) img
-# 	$(IMGTOL) w a: haribote.img
 apps :
 	$(foreach app, $(APPS), $(MAKE) -C $(APPPATH)$(app) $(\n))
 

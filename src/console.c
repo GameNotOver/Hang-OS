@@ -10,7 +10,7 @@ void console_task(SHEET *sheet, unsigned int memtotal){
     CONSOLE cons;
 	FILEHANDLE fhandle[8];
 
-	char *nihong = (char *) *((int *) 0x0fc8);
+	unsigned char *songti = (unsigned char *) *((int *) 0x0fc8);
 
 	int i;
 	char cmdline[30];
@@ -42,7 +42,7 @@ void console_task(SHEET *sheet, unsigned int memtotal){
 	/* 显示提示符 */
 	cons_putchar(&cons, '>', 1);
 
-	if(nihong[4096] != 0xff){
+	if(songti[4096] != 0xff){
 		task->langmode = 1;
 	}else{
 		task->langmode = 0;
@@ -394,7 +394,14 @@ void cmd_ncst(CONSOLE *cons, char *para){
 void cmd_langmode(CONSOLE *cons, char *para){
 	TASK *task = task_current();
 	unsigned char mode = para[0] - '0';
-	if(mode <= 2){
+	char s[3];
+	if(para[0] == 0){
+		sprintf(s, "%d", task->langmode);
+		cons_putstr(cons, s);
+		cons_newline(cons);
+		return;
+	}
+	if(mode <= 1){
 		task->langmode = mode;
 	}else{
 		cons_putstr(cons, "mode number error\n");
@@ -674,7 +681,7 @@ int *os_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int e
 				if(task->fhandle[i].buf == NULL)
 					break;
 			fh = &task->fhandle[i];
-			reg[7] = NULL;
+			reg[7] = (int) NULL;
 			if(i < 8){
 				finfo = file_search((char *) ebx + ds_base, (FILEINFO *) (ADR_DISKIMG + 0x002600), 224);
 				if(finfo != NULL){

@@ -45,7 +45,7 @@ void putStrOnSheet(SHEET *sheet, int x, int y, int font_color, char *str);
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color);
 void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, char *str);
 void putLineOnSheet(SHEET *sheet, int x0, int y0, int x1, int y1, int color);
-void putfonts8_asc_sht(struct SHEET *sht, int x, int y, int c, int b, char *s, int l);
+void putfontGB2312(char *vram, int xsize, int x, int y, char c, char *font);
 
 /* windows.c */
 void make_window8(SHEET *sheet, int xsize, int ysize, char *title, char act);

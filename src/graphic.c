@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include "../include/function.h"
 
+int y_pos = 0;
+
 void init_palette(void)
 {
 	/* data.c */
@@ -92,65 +94,51 @@ void putfont8(char *vram, int xsize, int x, int y, char c, char *font)
 	return;
 }
 
-void putfonts8_asc(char *vram, int xsize, int x, int y, char c, unsigned char *s)
-{
+void putfontGB2312(char *vram, int xsize, int x, int y, char c, char *font){
+	int i;
+	char *p, d /* data */;
+	for (i = 0; i < 16; i++) {
+		p = vram + (y + i) * xsize + x;
+		d = font[i * 2];
+		if ((d & 0x80) != 0) { p[0] = c; }
+		if ((d & 0x40) != 0) { p[1] = c; }
+		if ((d & 0x20) != 0) { p[2] = c; }
+		if ((d & 0x10) != 0) { p[3] = c; }
+		if ((d & 0x08) != 0) { p[4] = c; }
+		if ((d & 0x04) != 0) { p[5] = c; }
+		if ((d & 0x02) != 0) { p[6] = c; }
+		if ((d & 0x01) != 0) { p[7] = c; }
+	}
+	return;
+}
 
+void putfonts8_asc(char *vram, int xsize, int x, int y, char c, unsigned char *s){
 	extern char hankaku[4096];
 	TASK *task = task_current();
-	char *nihong = (char *) *((int *) 0x0fc8);
+	char *songti = (char *) *((int *) 0x0fc8);
 	char *font;
-	int k, t;
+	unsigned int k, t;
 
-	if(task->langmode == 0){
+	if(task->langmode == 0){	/* ASCII */
 		for (; *s != 0x00; s++) {
 			putfont8(vram, xsize, x, y, c, hankaku + *s * 16);
 			x += 8;
 		}
 	}
-	if(task->langmode == 1){
+	if(task->langmode == 1){	/* GB2312 */
 		for (; *s != 0x00; s++) {
 			if(task->langbyte1 == 0){
-				if((0x81 <= *s && *s <= 0x9f) || (0xe0 <= *s && *s <= 0xfc))
+				if(0xa1 <= *s && *s <= 0xfe)
 					task->langbyte1 = *s;
 				else
-					putfont8(vram, xsize, x, y, c, nihong + *s * 16);
+					putfont8(vram, xsize, x, y, c, hankaku + *s * 16);
 			}else{
-				if(0x81 <= task->langbyte1 && task->langbyte1 <= 0x9f)
-					k = (task->langbyte1 - 0x81) * 2;
-				else
-					k = (task->langbyte1 - 0xe0) * 2 + 62;
-
-				if(0x40 <= *s && *s <= 0x7e){
-					t = *s - 0x40;
-				}else if(0x80 <= *s && *s <= 0x9e){
-					t = *s - 0x80 + 63;
-				}else{
-					t = *s - 0x9f;
-					k++;
-				}
+				k = task->langbyte1 - 0xa0;
+				t = *s - 0xa0;
 				task->langbyte1 = 0;
-				font = nihong + 256 * 16 + (k * 94 + t) * 32;
-				putfont8(vram, xsize, x - 8, y, c, font);		/* 左半部分 */
-				putfont8(vram, xsize, x    , y, c, font + 16);	/* 右半部分 */
-			}
-			x += 8;
-		}
-	}
-	if(task->langmode == 2){
-		for(; *s != 0x00; s++){
-			if(task->langbyte1 == 0){
-				if(0x81 <= *s && *s <= 0xfe){
-					task->langbyte1 = *s;
-				}else{
-					putfont8(vram, xsize, x, y, c, nihong + *s * 16);
-				}
-			}else{
-				k = task->langbyte1 - 0xa1;
-				t = *s - 0xa1;
-				task->langbyte1 = 0;
-				font = nihong + 256 * 16 + (k * 94 + t) * 32;
-				putfont8(vram, xsize, x - 8, y, c, font);
-				putfont8(vram, xsize, x, y, c, font + 16);
+				font = songti + (94 * (k - 1) + (t - 1)) * 32;
+				putfontGB2312(vram, xsize, x - 8, y, c, font);		/* 左半部分 */
+				putfontGB2312(vram, xsize, x    , y, c, font+1);	/* 右半部分 */
 			}
 			x += 8;
 		}
@@ -159,9 +147,7 @@ void putfonts8_asc(char *vram, int xsize, int x, int y, char c, unsigned char *s
 	return;
 }
 
-void init_mouse_cursor8(char *mouse, int bc)
-/*准备鼠标光标（16×16）*/
-{
+void init_mouse_cursor8(char *mouse, int bc){	/*准备鼠标光标（16×16）*/
 	/* data.c */
 	extern char cursor[16][16];
 
@@ -215,20 +201,6 @@ void putStrOnSheet_BG(SHEET *sheet, int x, int y, int font_color, int bg_color, 
 	}	
 	
 	
-}
-
-void putfonts8_asc_sht(struct SHEET *sht, int x, int y, int c, int b, char *s, int l)
-{
-	TASK *task = task_current();
-	boxfill8(sht->buf, sht->bxsize, b, x, y, x + l * 8 - 1, y + 15);
-	if(task->langmode != 0 && task->langbyte1 != 0){
-		putfonts8_asc(sht->buf, sht->bxsize, x, y, c, s);
-		sheet_refresh(sht, x-8, y, x + l * 8, y + 16);
-	}else{
-		putfonts8_asc(sht->buf, sht->bxsize, x, y, c, s);
-		sheet_refresh(sht, x, y, x + l * 8, y + 16);
-	}
-	return;
 }
 
 void putBoxOnSheet(SHEET *sheet, int x, int y, int sx, int sy, int color){

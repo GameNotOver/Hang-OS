@@ -6,7 +6,7 @@ int main(void)
 	int i, j, k, offset;
 	int flag;
 	unsigned char buffer[32];
-	unsigned char word[3] = "Œ“";
+	unsigned char word[3] = {0xce, 0xe2, 0x00};
 	unsigned char key[8] = { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 };
 
 	fd = fopen("songti.fnt", "rb");
